@@ -9,255 +9,243 @@ import java.util.Calendar
 object ReminderScheduler {
 
     const val PREFS = "wadhkur_settings"
+
+    // التذكير العام
     const val ENABLED = "reminder_enabled"
     const val INTERVAL = "reminder_interval_minutes"
 
-    /*
-     * أنواع التذكيرات الثلاثة:
-     *
-     * GENERAL = الأذكار العامة
-     * MORNING = أذكار الصباح
-     * EVENING = أذكار المساء
-     */
+    // التذكيرات المستقلة
+    const val MORNING_ENABLED = "morning_enabled"
+    const val EVENING_ENABLED = "evening_enabled"
+
     const val TYPE_GENERAL = "GENERAL"
     const val TYPE_MORNING = "MORNING"
     const val TYPE_EVENING = "EVENING"
 
-    private const val EXTRA_REMINDER_TYPE = "reminder_type"
+    private const val REQUEST_GENERAL = 7300
+    private const val REQUEST_MORNING = 7301
+    private const val REQUEST_EVENING = 7302
 
-    /*
-     * أرقام مختلفة لكل تذكير،
-     * حتى لا يلغي تذكيرٌ تذكيرًا آخر.
-     */
-    private const val REQUEST_CODE_GENERAL = 7300
-    private const val REQUEST_CODE_MORNING = 7301
-    private const val REQUEST_CODE_EVENING = 7302
-
-    /*
-     * جدولة جميع أنواع التذكيرات.
-     */
     fun scheduleAll(context: Context) {
 
-        val prefs =
-            context.getSharedPreferences(
-                PREFS,
-                Context.MODE_PRIVATE
-            )
+        val prefs = context.getSharedPreferences(
+            PREFS,
+            Context.MODE_PRIVATE
+        )
 
-        if (
-            !prefs.getBoolean(
-                ENABLED,
-                true
-            )
-        ) {
-            cancelAll(context)
-            return
+        val generalEnabled = prefs.getBoolean(
+            ENABLED,
+            true
+        )
+
+        val morningEnabled = prefs.getBoolean(
+            MORNING_ENABLED,
+            true
+        )
+
+        val eveningEnabled = prefs.getBoolean(
+            EVENING_ENABLED,
+            true
+        )
+
+        if (generalEnabled) {
+            scheduleGeneral(context)
+        } else {
+            cancelGeneral(context)
         }
 
-        scheduleGeneral(context)
-        scheduleMorning(context)
-        scheduleEvening(context)
+        if (morningEnabled) {
+            scheduleMorning(context)
+        } else {
+            cancelMorning(context)
+        }
+
+        if (eveningEnabled) {
+            scheduleEvening(context)
+        } else {
+            cancelEvening(context)
+        }
     }
 
-    /*
-     * تذكير الأذكار العامة.
-     *
-     * يعتمد فقط على الفاصل الذي اختاره المستخدم:
-     * 1، 3، 5، 10، 15، 30 أو 60 دقيقة.
-     */
+    // ---------------------------------------------------------
+    // التذكير العام
+    // ---------------------------------------------------------
+
     fun scheduleGeneral(context: Context) {
 
-        val prefs =
-            context.getSharedPreferences(
-                PREFS,
-                Context.MODE_PRIVATE
-            )
+        val prefs = context.getSharedPreferences(
+            PREFS,
+            Context.MODE_PRIVATE
+        )
 
-        if (
-            !prefs.getBoolean(
-                ENABLED,
-                true
-            )
-        ) {
+        if (!prefs.getBoolean(ENABLED, true)) {
             cancelGeneral(context)
             return
         }
 
-        val minutes =
-            prefs.getInt(
-                INTERVAL,
-                30
-            ).coerceIn(1, 60)
+        val interval = prefs.getInt(
+            INTERVAL,
+            30
+        ).coerceIn(1, 60)
 
-        val first =
-            Calendar.getInstance().apply {
+        val triggerAt =
+            System.currentTimeMillis() +
+                    interval * 60_000L
 
-                add(
-                    Calendar.MINUTE,
-                    minutes
-                )
-
-                set(
-                    Calendar.SECOND,
-                    0
-                )
-
-                set(
-                    Calendar.MILLISECOND,
-                    0
-                )
-            }
-
-        scheduleAlarm(
+        schedule(
             context = context,
             type = TYPE_GENERAL,
-            requestCode = REQUEST_CODE_GENERAL,
-            triggerAtMillis = first.timeInMillis
+            requestCode = REQUEST_GENERAL,
+            triggerAtMillis = triggerAt
         )
     }
 
-    /*
-     * تذكير أذكار الصباح.
-     *
-     * الموعد ثابت يوميًا الساعة 06:00 صباحًا.
-     */
+    fun cancelGeneral(context: Context) {
+
+        cancel(
+            context = context,
+            type = TYPE_GENERAL,
+            requestCode = REQUEST_GENERAL
+        )
+    }
+
+    // ---------------------------------------------------------
+    // أذكار الصباح
+    // ---------------------------------------------------------
+
     fun scheduleMorning(context: Context) {
 
-        val prefs =
-            context.getSharedPreferences(
-                PREFS,
-                Context.MODE_PRIVATE
-            )
+        val prefs = context.getSharedPreferences(
+            PREFS,
+            Context.MODE_PRIVATE
+        )
 
-        if (
-            !prefs.getBoolean(
-                ENABLED,
-                true
-            )
-        ) {
+        if (!prefs.getBoolean(MORNING_ENABLED, true)) {
             cancelMorning(context)
             return
         }
 
-        val nextMorning =
-            Calendar.getInstance().apply {
+        val calendar = Calendar.getInstance().apply {
 
-                set(
-                    Calendar.HOUR_OF_DAY,
-                    6
+            set(
+                Calendar.HOUR_OF_DAY,
+                6
+            )
+
+            set(
+                Calendar.MINUTE,
+                0
+            )
+
+            set(
+                Calendar.SECOND,
+                0
+            )
+
+            set(
+                Calendar.MILLISECOND,
+                0
+            )
+
+            if (
+                timeInMillis <=
+                System.currentTimeMillis()
+            ) {
+                add(
+                    Calendar.DAY_OF_YEAR,
+                    1
                 )
-
-                set(
-                    Calendar.MINUTE,
-                    0
-                )
-
-                set(
-                    Calendar.SECOND,
-                    0
-                )
-
-                set(
-                    Calendar.MILLISECOND,
-                    0
-                )
-
-                /*
-                 * إذا كانت الساعة 06:00 قد مرت اليوم،
-                 * ننتقل إلى الساعة 06:00 من اليوم التالي.
-                 */
-                if (
-                    timeInMillis <=
-                    Calendar.getInstance().timeInMillis
-                ) {
-                    add(
-                        Calendar.DAY_OF_YEAR,
-                        1
-                    )
-                }
             }
+        }
 
-        scheduleAlarm(
+        schedule(
             context = context,
             type = TYPE_MORNING,
-            requestCode = REQUEST_CODE_MORNING,
-            triggerAtMillis = nextMorning.timeInMillis
+            requestCode = REQUEST_MORNING,
+            triggerAtMillis = calendar.timeInMillis
         )
     }
 
-    /*
-     * تذكير أذكار المساء.
-     *
-     * الموعد ثابت يوميًا الساعة 05:00 عصرًا.
-     */
+    fun cancelMorning(context: Context) {
+
+        cancel(
+            context = context,
+            type = TYPE_MORNING,
+            requestCode = REQUEST_MORNING
+        )
+    }
+
+    // ---------------------------------------------------------
+    // أذكار المساء
+    // ---------------------------------------------------------
+
     fun scheduleEvening(context: Context) {
 
-        val prefs =
-            context.getSharedPreferences(
-                PREFS,
-                Context.MODE_PRIVATE
-            )
+        val prefs = context.getSharedPreferences(
+            PREFS,
+            Context.MODE_PRIVATE
+        )
 
-        if (
-            !prefs.getBoolean(
-                ENABLED,
-                true
-            )
-        ) {
+        if (!prefs.getBoolean(EVENING_ENABLED, true)) {
             cancelEvening(context)
             return
         }
 
-        val nextEvening =
-            Calendar.getInstance().apply {
+        val calendar = Calendar.getInstance().apply {
 
-                set(
-                    Calendar.HOUR_OF_DAY,
-                    17
+            set(
+                Calendar.HOUR_OF_DAY,
+                17
+            )
+
+            set(
+                Calendar.MINUTE,
+                0
+            )
+
+            set(
+                Calendar.SECOND,
+                0
+            )
+
+            set(
+                Calendar.MILLISECOND,
+                0
+            )
+
+            if (
+                timeInMillis <=
+                System.currentTimeMillis()
+            ) {
+                add(
+                    Calendar.DAY_OF_YEAR,
+                    1
                 )
-
-                set(
-                    Calendar.MINUTE,
-                    0
-                )
-
-                set(
-                    Calendar.SECOND,
-                    0
-                )
-
-                set(
-                    Calendar.MILLISECOND,
-                    0
-                )
-
-                /*
-                 * إذا كانت الساعة 05:00 عصرًا قد مرت اليوم،
-                 * ننتقل إلى الساعة 05:00 من اليوم التالي.
-                 */
-                if (
-                    timeInMillis <=
-                    Calendar.getInstance().timeInMillis
-                ) {
-                    add(
-                        Calendar.DAY_OF_YEAR,
-                        1
-                    )
-                }
             }
+        }
 
-        scheduleAlarm(
+        schedule(
             context = context,
             type = TYPE_EVENING,
-            requestCode = REQUEST_CODE_EVENING,
-            triggerAtMillis = nextEvening.timeInMillis
+            requestCode = REQUEST_EVENING,
+            triggerAtMillis = calendar.timeInMillis
         )
     }
 
-    /*
-     * إنشاء Alarm مستقل لكل نوع.
-     */
-    private fun scheduleAlarm(
+    fun cancelEvening(context: Context) {
+
+        cancel(
+            context = context,
+            type = TYPE_EVENING,
+            requestCode = REQUEST_EVENING
+        )
+    }
+
+    // ---------------------------------------------------------
+    // جدولة المنبه
+    // ---------------------------------------------------------
+
+    private fun schedule(
         context: Context,
         type: String,
         requestCode: Int,
@@ -266,8 +254,8 @@ object ReminderScheduler {
 
         val alarmManager =
             context.getSystemService(
-                AlarmManager::class.java
-            )
+                Context.ALARM_SERVICE
+            ) as AlarmManager
 
         val intent =
             Intent(
@@ -276,85 +264,32 @@ object ReminderScheduler {
             ).apply {
 
                 putExtra(
-                    EXTRA_REMINDER_TYPE,
+                    "type",
                     type
                 )
             }
 
-        val pending =
+        val pendingIntent =
             PendingIntent.getBroadcast(
                 context,
                 requestCode,
                 intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or
-                    PendingIntent.FLAG_IMMUTABLE
+                        PendingIntent.FLAG_IMMUTABLE
             )
 
-        /*
-         * إلغاء الموعد السابق لنفس النوع فقط.
-         */
-        alarmManager.cancel(pending)
-
-        /*
-         * تشغيل التذكير حتى أثناء وضع توفير الطاقة.
-         */
         alarmManager.setAndAllowWhileIdle(
             AlarmManager.RTC_WAKEUP,
             triggerAtMillis,
-            pending
+            pendingIntent
         )
     }
 
-    /*
-     * إلغاء جميع التذكيرات.
-     */
-    fun cancelAll(context: Context) {
+    // ---------------------------------------------------------
+    // إلغاء المنبه
+    // ---------------------------------------------------------
 
-        cancelGeneral(context)
-        cancelMorning(context)
-        cancelEvening(context)
-    }
-
-    /*
-     * إلغاء تذكير الأذكار العامة فقط.
-     */
-    fun cancelGeneral(context: Context) {
-
-        cancelAlarm(
-            context,
-            TYPE_GENERAL,
-            REQUEST_CODE_GENERAL
-        )
-    }
-
-    /*
-     * إلغاء تذكير أذكار الصباح فقط.
-     */
-    fun cancelMorning(context: Context) {
-
-        cancelAlarm(
-            context,
-            TYPE_MORNING,
-            REQUEST_CODE_MORNING
-        )
-    }
-
-    /*
-     * إلغاء تذكير أذكار المساء فقط.
-     */
-    fun cancelEvening(context: Context) {
-
-        cancelAlarm(
-            context,
-            TYPE_EVENING,
-            REQUEST_CODE_EVENING
-        )
-    }
-
-    /*
-     * إلغاء Alarm محدد.
-     */
-    private fun cancelAlarm(
+    private fun cancel(
         context: Context,
         type: String,
         requestCode: Int
@@ -362,8 +297,8 @@ object ReminderScheduler {
 
         val alarmManager =
             context.getSystemService(
-                AlarmManager::class.java
-            )
+                Context.ALARM_SERVICE
+            ) as AlarmManager
 
         val intent =
             Intent(
@@ -372,20 +307,24 @@ object ReminderScheduler {
             ).apply {
 
                 putExtra(
-                    EXTRA_REMINDER_TYPE,
+                    "type",
                     type
                 )
             }
 
-        val pending =
+        val pendingIntent =
             PendingIntent.getBroadcast(
                 context,
                 requestCode,
                 intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or
-                    PendingIntent.FLAG_IMMUTABLE
+                        PendingIntent.FLAG_IMMUTABLE
             )
 
-        alarmManager.cancel(pending)
+        alarmManager.cancel(
+            pendingIntent
+        )
+
+        pendingIntent.cancel()
     }
 }
