@@ -334,7 +334,7 @@ class MainActivity : ComponentActivity() {
                 MainCard(
                     "📿",
                     "المسبحة",
-                    "عداد بسيط للتسبيح",
+                    "عداد للتسبيح مع عدة أذكار",
                     onTasbeeh
                 )
             }
@@ -733,10 +733,6 @@ class MainActivity : ComponentActivity() {
                                     )
                                     .apply()
 
-                                /*
-                                 * تشغيل أو إيقاف جميع أنواع
-                                 * التذكيرات.
-                                 */
                                 ReminderScheduler.scheduleAll(
                                     this@MainActivity
                                 )
@@ -792,10 +788,6 @@ class MainActivity : ComponentActivity() {
                                                 )
                                                 .apply()
 
-                                            /*
-                                             * تغيير الفاصل يؤثر
-                                             * على الأذكار العامة فقط.
-                                             */
                                             ReminderScheduler.scheduleGeneral(
                                                 this@MainActivity
                                             )
@@ -985,13 +977,41 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /*
+     * شاشة المسبحة
+     *
+     * الأذكار المتاحة:
+     * 1. سبحان الله
+     * 2. الحمد لله
+     * 3. أستغفر الله
+     * 4. لا إله إلا الله
+     * 5. اللهم صل وسلم وبارك على نبينا محمد
+     * 6. لا حول ولا قوة إلا بالله
+     */
     @Composable
     private fun TasbeehScreen(
         onBack: () -> Unit
     ) {
 
-        var count by remember {
+        val adhkar = listOf(
+            "سبحان الله",
+            "الحمد لله",
+            "أستغفر الله",
+            "لا إله إلا الله",
+            "اللهم صل وسلم وبارك على نبينا محمد",
+            "لا حول ولا قوة إلا بالله"
+        )
+
+        var selectedDhikr by rememberSaveable {
+            mutableStateOf(adhkar[0])
+        }
+
+        var count by rememberSaveable {
             mutableIntStateOf(0)
+        }
+
+        var expanded by remember {
+            mutableStateOf(false)
         }
 
         Column(
@@ -1008,9 +1028,79 @@ class MainActivity : ComponentActivity() {
             )
 
             Spacer(
-                Modifier.height(50.dp)
+                Modifier.height(30.dp)
             )
 
+            /*
+             * اختيار الذكر
+             */
+            Box {
+
+                OutlinedButton(
+                    onClick = {
+                        expanded = true
+                    }
+                ) {
+
+                    Text(
+                        selectedDhikr,
+                        color = Color.White,
+                        fontSize = 17.sp,
+                        textAlign = TextAlign.Center
+                    )
+
+                    Spacer(
+                        Modifier.width(8.dp)
+                    )
+
+                    Text(
+                        "▼",
+                        color = cyan
+                    )
+                }
+
+                DropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = {
+                        expanded = false
+                    }
+                ) {
+
+                    adhkar.forEach { dhikr ->
+
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    dhikr,
+                                    textAlign = TextAlign.End,
+                                    modifier =
+                                        Modifier.fillMaxWidth()
+                                )
+                            },
+                            onClick = {
+
+                                selectedDhikr = dhikr
+
+                                /*
+                                 * تصفير العداد عند
+                                 * اختيار ذكر جديد.
+                                 */
+                                count = 0
+
+                                expanded = false
+                            }
+                        )
+                    }
+                }
+            }
+
+            Spacer(
+                Modifier.height(45.dp)
+            )
+
+            /*
+             * عدد التسبيحات
+             */
             Text(
                 "$count",
                 color = green,
@@ -1018,16 +1108,28 @@ class MainActivity : ComponentActivity() {
                 fontWeight = FontWeight.Bold
             )
 
+            Spacer(
+                Modifier.height(12.dp)
+            )
+
+            /*
+             * الذكر المختار
+             */
             Text(
-                "سبحان الله",
+                selectedDhikr,
                 color = Color.White,
-                fontSize = 24.sp
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
             )
 
             Spacer(
-                Modifier.height(30.dp)
+                Modifier.height(35.dp)
             )
 
+            /*
+             * زر التسبيح
+             */
             Button(
                 onClick = {
                     count++
@@ -1042,13 +1144,24 @@ class MainActivity : ComponentActivity() {
                 )
             }
 
+            Spacer(
+                Modifier.height(10.dp)
+            )
+
+            /*
+             * تصفير العداد
+             */
             TextButton(
                 onClick = {
                     count = 0
                 }
             ) {
 
-                Text("تصفير")
+                Text(
+                    "تصفير",
+                    color = cyan,
+                    fontSize = 16.sp
+                )
             }
         }
     }
