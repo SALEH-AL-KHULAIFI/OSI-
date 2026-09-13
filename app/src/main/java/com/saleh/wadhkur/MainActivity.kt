@@ -134,10 +134,11 @@ class MainActivity : ComponentActivity() {
     }
 
     /*
-     * الحصول على أفضل موقع متاح.
+     * الحصول على موقع الهاتف بشكل موثوق.
      *
-     * إذا لم يكن هناك LastKnownLocation محفوظ،
-     * نطلب موقعًا حديثًا من GPS أو الشبكة.
+     * لا نعتمد فقط على LastKnownLocation.
+     * نستخدم الموقع المحفوظ كاستجابة سريعة إن وجد،
+     * ثم نطلب موقعًا حديثًا من النظام لتحديث الإحداثيات.
      */
     private fun saveBestLocation() {
 
@@ -145,14 +146,17 @@ class MainActivity : ComponentActivity() {
             getSystemService(Context.LOCATION_SERVICE)
                     as LocationManager
 
-        if (
+        val hasFine =
             checkSelfPermission(
                 Manifest.permission.ACCESS_FINE_LOCATION
-            ) != PackageManager.PERMISSION_GRANTED &&
+            ) == PackageManager.PERMISSION_GRANTED
+
+        val hasCoarse =
             checkSelfPermission(
                 Manifest.permission.ACCESS_COARSE_LOCATION
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
+            ) == PackageManager.PERMISSION_GRANTED
+
+        if (!hasFine && !hasCoarse) {
             return
         }
 
@@ -162,7 +166,23 @@ class MainActivity : ComponentActivity() {
                 MODE_PRIVATE
             )
 
+        var locationSaved = false
+
         fun saveLocation(location: Location) {
+
+            if (
+                !location.latitude.isFinite() ||
+                !location.longitude.isFinite()
+            ) {
+                return
+            }
+
+            if (
+                location.latitude !in -90.0..90.0 ||
+                location.longitude !in -180.0..180.0
+            ) {
+                return
+            }
 
             prefs.edit()
                 .putFloat(
@@ -175,10 +195,8 @@ class MainActivity : ComponentActivity() {
                 )
                 .apply()
 
-            /*
-             * إعادة إنشاء الواجهة حتى تقرأ مواقيت الصلاة
-             * الإحداثيات الجديدة مباشرة.
-             */
+            locationSaved = true
+
             runOnUiThread {
                 recreate()
             }
@@ -187,62 +205,21 @@ class MainActivity : ComponentActivity() {
         try {
 
             /*
-             * أولاً نحاول الحصول على أفضل موقع محفوظ
-             * من جميع مزودي الموقع المتاحين.
+             * التأكد أولًا من أن خدمة الموقع مفعلة.
              */
-            val providers =
-                manager.getProviders(true)
-
-            var bestLocation: Location? = null
-
-            for (provider in providers) {
-
-                try {
-
-                    val location =
-                        manager.getLastKnownLocation(provider)
-
-                    if (
-                        location != null &&
-                        (
-                            bestLocation == null ||
-                            location.accuracy <
-                            bestLocation!!.accuracy
+            val locationEnabled =
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    manager.isLocationEnabled
+                } else {
+                    manager.isProviderEnabled(
+                        LocationManager.GPS_PROVIDER
+                    ) ||
+                        manager.isProviderEnabled(
+                            LocationManager.NETWORK_PROVIDER
                         )
-                    ) {
-                        bestLocation = location
-                    }
-
-                } catch (_: SecurityException) {
-                }
-            }
-
-            if (bestLocation != null) {
-                saveLocation(bestLocation!!)
-                return
-            }
-
-            /*
-             * لا يوجد موقع محفوظ.
-             * نحدد أفضل مزود متاح ونطلب موقعًا جديدًا.
-             */
-            val provider =
-                when {
-
-                    manager.isProviderEnabled(
-                        LocationManager.GPS_PROVIDER
-                    ) ->
-                        LocationManager.GPS_PROVIDER
-
-                    manager.isProviderEnabled(
-                        LocationManager.NETWORK_PROVIDER
-                    ) ->
-                        LocationManager.NETWORK_PROVIDER
-
-                    else -> null
                 }
 
-            if (provider == null) {
+            if (!locationEnabled) {
 
                 Toast.makeText(
                     this,
@@ -254,27 +231,151 @@ class MainActivity : ComponentActivity() {
             }
 
             /*
-             * طلب موقع حديث.
+             * نحصل على آخر موقع متاح من جميع المزودين.
+             * هذا يعطي نتيجة سريعة إذا كان النظام يملك موقعًا محفوظًا.
              */
-            manager.requestLocationUpdates(
-                provider,
-                0L,
-                0f,
-                object : android.location.LocationListener {
+            var bestLocation: Location? = null
 
-                    override fun onLocationChanged(
-                        location: Location
-                    ) {
-                        saveLocation(location)
+            val providers =
+                manager.getProviders(true)
 
-                        try {
-                            manager.removeUpdates(this)
-                        } catch (_: Exception) {
+            for (provider in providers) {
+
+                try {
+
+                    val location =
+                        manager.getLastKnownLocation(provider)
+
+                    if (location != null) {
+
+                        if (
+                            bestLocation == null ||
+                            location.accuracy <
+                            bestLocation!!.accuracy
+                        ) {
+                            bestLocation = location
                         }
                     }
-                },
-                android.os.Looper.getMainLooper()
-            )
+
+                } catch (_: SecurityException) {
+                }
+            }
+
+            if (bestLocation != null) {
+                saveLocation(bestLocation!!)
+            }
+
+            /*
+             * بعد الموقع المحفوظ، نطلب موقعًا حديثًا أيضًا.
+             *
+             * Android 11 وما بعده:
+             * نستخدم getCurrentLocation للحصول على قراءة حديثة
+             * بدل الاعتماد على موقع قديم.
+             */
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+
+                val provider =
+                    when {
+                        manager.isProviderEnabled(
+                            LocationManager.NETWORK_PROVIDER
+                        ) ->
+                            LocationManager.NETWORK_PROVIDER
+
+                        manager.isProviderEnabled(
+                            LocationManager.GPS_PROVIDER
+                        ) ->
+                            LocationManager.GPS_PROVIDER
+
+                        else -> null
+                    }
+
+                if (provider == null) {
+                    if (!locationSaved) {
+                        Toast.makeText(
+                            this,
+                            "تعذر تحديد موقع الهاتف",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                    return
+                }
+
+                manager.getCurrentLocation(
+                    provider,
+                    null,
+                    mainExecutor
+                ) { location ->
+
+                    if (location != null) {
+                        saveLocation(location)
+                    } else if (!locationSaved) {
+                        runOnUiThread {
+                            Toast.makeText(
+                                this,
+                                "تعذر الحصول على الموقع الحالي",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    }
+                }
+
+            } else {
+
+                /*
+                 * للأجهزة الأقدم من Android 11:
+                 * نستخدم LocationListener للحصول على موقع حديث.
+                 */
+                val provider =
+                    when {
+                        manager.isProviderEnabled(
+                            LocationManager.NETWORK_PROVIDER
+                        ) ->
+                            LocationManager.NETWORK_PROVIDER
+
+                        manager.isProviderEnabled(
+                            LocationManager.GPS_PROVIDER
+                        ) ->
+                            LocationManager.GPS_PROVIDER
+
+                        else -> null
+                    }
+
+                if (provider == null) {
+
+                    if (!locationSaved) {
+                        Toast.makeText(
+                            this,
+                            "تعذر تحديد موقع الهاتف",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+
+                    return
+                }
+
+                val listener =
+                    object : android.location.LocationListener {
+
+                        override fun onLocationChanged(
+                            location: Location
+                        ) {
+                            saveLocation(location)
+
+                            try {
+                                manager.removeUpdates(this)
+                            } catch (_: Exception) {
+                            }
+                        }
+                    }
+
+                manager.requestLocationUpdates(
+                    provider,
+                    0L,
+                    0f,
+                    listener,
+                    android.os.Looper.getMainLooper()
+                )
+            }
 
         } catch (_: SecurityException) {
 
@@ -369,10 +470,6 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-
-    // ---------------------------------------------------------
-    // الصفحة الرئيسية
-    // ---------------------------------------------------------
 
     @Composable
     private fun HomeScreen(
@@ -485,10 +582,6 @@ class MainActivity : ComponentActivity() {
             )
         }
     }
-
-    // ---------------------------------------------------------
-    // عداد رمضان
-    // ---------------------------------------------------------
 
     @Composable
     private fun RamadanCounter() {
@@ -684,10 +777,6 @@ class MainActivity : ComponentActivity() {
             )
         }
     }
-
-    // ---------------------------------------------------------
-    // الصلاة القادمة
-    // ---------------------------------------------------------
 
     @Composable
     private fun NextPrayerCard() {
@@ -1039,10 +1128,6 @@ class MainActivity : ComponentActivity() {
         )
     }
 
-    // ---------------------------------------------------------
-    // البطاقات
-    // ---------------------------------------------------------
-
     @Composable
     private fun MainCard(
         icon: String,
@@ -1123,10 +1208,6 @@ class MainActivity : ComponentActivity() {
             content = content
         )
     }
-
-    // ---------------------------------------------------------
-    // شاشة الأذكار
-    // ---------------------------------------------------------
 
     @Composable
     private fun DhikrScreen(
@@ -1364,10 +1445,6 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-
-    // ---------------------------------------------------------
-    // شاشة التذكيرات
-    // ---------------------------------------------------------
 
     @Composable
     private fun ReminderScreen(
@@ -1699,10 +1776,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // ---------------------------------------------------------
-    // مواقيت الصلاة
-    // ---------------------------------------------------------
-
     @Composable
     private fun PrayerScreen(
         onBack: () -> Unit,
@@ -1969,8 +2042,7 @@ class MainActivity : ComponentActivity() {
                                         cyan
                                     },
                                 fontSize = 17.sp,
-                                fontWeight =
-                                    FontWeight.Bold
+                                fontWeight = FontWeight.Bold
                             )
                         }
                     }
@@ -1993,10 +2065,6 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-
-    // ---------------------------------------------------------
-    // المسبحة
-    // ---------------------------------------------------------
 
     @Composable
     private fun TasbeehScreen(
@@ -2325,10 +2393,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // ---------------------------------------------------------
-    // عن التطبيق
-    // ---------------------------------------------------------
-
     @Composable
     private fun AboutScreen(
         onBack: () -> Unit
@@ -2420,10 +2484,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // ---------------------------------------------------------
-    // شريط العنوان
-    // ---------------------------------------------------------
-
     @Composable
     private fun TopBar(
         title: String,
@@ -2457,10 +2517,6 @@ class MainActivity : ComponentActivity() {
             )
         }
     }
-
-    // ---------------------------------------------------------
-    // نافذة التذكير
-    // ---------------------------------------------------------
 
     @Composable
     private fun DhikrPopup(
@@ -2513,10 +2569,6 @@ class MainActivity : ComponentActivity() {
             }
         )
     }
-
-    // ---------------------------------------------------------
-    // الثيم
-    // ---------------------------------------------------------
 
     @Composable
     private fun WadhkurTheme(
