@@ -10,7 +10,7 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import kotlin.random.Random
 
-class ReminderReceiver : BroadcastReceiver {
+class ReminderReceiver : BroadcastReceiver() {
 
     companion object {
         private const val CHANNEL_ID = "dhikr_reminders_v2"
