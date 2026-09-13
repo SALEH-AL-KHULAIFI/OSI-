@@ -16,6 +16,8 @@ class ReminderReceiver : BroadcastReceiver() {
         private const val CHANNEL_ID = "dhikr_reminders_v2"
         private const val NOTIFICATION_ID = 8800
         private const val PENDING_INTENT_REQUEST_CODE = 7400
+
+        private const val EXTRA_REMINDER_TYPE = "reminder_type"
     }
 
     override fun onReceive(
@@ -30,8 +32,8 @@ class ReminderReceiver : BroadcastReceiver() {
             )
 
         /*
-         * إذا كان المستخدم أوقف التذكير،
-         * لا نعرض شيئًا ولا نعيد الجدولة.
+         * إذا كان المستخدم أوقف التذكيرات،
+         * لا نعرض أي تذكير.
          */
         if (
             !prefs.getBoolean(
@@ -43,23 +45,76 @@ class ReminderReceiver : BroadcastReceiver() {
         }
 
         /*
-         * جمع جميع أنواع الأذكار.
+         * معرفة نوع التذكير الذي تم تشغيله.
          */
-        val allDhikr =
-            DhikrRepository.main +
-            DhikrRepository.morning +
-            DhikrRepository.evening
+        val reminderType =
+            intent?.getStringExtra(
+                EXTRA_REMINDER_TYPE
+            ) ?: ReminderScheduler.TYPE_GENERAL
 
-        if (allDhikr.isEmpty()) {
-            ReminderScheduler.schedule(context)
+        /*
+         * اختيار قائمة الأذكار حسب نوع التذكير.
+         *
+         * GENERAL  -> الأذكار العامة فقط
+         * MORNING  -> أذكار الصباح فقط
+         * EVENING  -> أذكار المساء فقط
+         */
+        val dhikrList =
+            when (reminderType) {
+
+                ReminderScheduler.TYPE_MORNING ->
+                    DhikrRepository.morning
+
+                ReminderScheduler.TYPE_EVENING ->
+                    DhikrRepository.evening
+
+                else ->
+                    DhikrRepository.main
+            }
+
+        /*
+         * إذا لم توجد أذكار في القائمة المطلوبة،
+         * نعيد جدولة نفس النوع فقط.
+         */
+        if (dhikrList.isEmpty()) {
+
+            when (reminderType) {
+
+                ReminderScheduler.TYPE_MORNING ->
+                    ReminderScheduler.scheduleMorning(context)
+
+                ReminderScheduler.TYPE_EVENING ->
+                    ReminderScheduler.scheduleEvening(context)
+
+                else ->
+                    ReminderScheduler.scheduleGeneral(context)
+            }
+
             return
         }
 
         /*
-         * اختيار ذكر عشوائي.
+         * اختيار ذكر عشوائي من القائمة الخاصة
+         * بهذا النوع فقط.
          */
         val dhikr =
-            allDhikr.random(Random.Default)
+            dhikrList.random(Random.Default)
+
+        /*
+         * تحديد عنوان مناسب للتذكير.
+         */
+        val reminderTitle =
+            when (reminderType) {
+
+                ReminderScheduler.TYPE_MORNING ->
+                    "أذكار الصباح"
+
+                ReminderScheduler.TYPE_EVENING ->
+                    "أذكار المساء"
+
+                else ->
+                    "ذكر"
+            }
 
         /*
          * الواجهة المخصصة للتذكير.
@@ -77,7 +132,12 @@ class ReminderReceiver : BroadcastReceiver() {
 
                 putExtra(
                     "dhikr_title",
-                    dhikr.title
+                    reminderTitle
+                )
+
+                putExtra(
+                    EXTRA_REMINDER_TYPE,
+                    reminderType
                 )
 
                 flags =
@@ -101,9 +161,7 @@ class ReminderReceiver : BroadcastReceiver() {
             )
 
         /*
-         * قناة جديدة لضمان أن مستوى الأهمية
-         * High حتى لو كانت القناة القديمة
-         * قد تم حفظ إعداداتها من النظام.
+         * إنشاء قناة الإشعارات.
          */
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
 
@@ -132,14 +190,7 @@ class ReminderReceiver : BroadcastReceiver() {
         }
 
         /*
-         * بناء الإشعار كوسيلة احتياطية.
-         *
-         * عند السماح بخاصية Full Screen Intent
-         * سيظهر ReminderActivity مباشرة.
-         *
-         * وإذا لم يسمح النظام بذلك، يبقى الإشعار
-         * ظاهرًا ويمكن للمستخدم الضغط عليه لفتح
-         * شاشة التذكير المخصصة.
+         * بناء الإشعار.
          */
         val notification =
             NotificationCompat.Builder(
@@ -150,7 +201,7 @@ class ReminderReceiver : BroadcastReceiver() {
                     android.R.drawable.ic_popup_reminder
                 )
                 .setContentTitle(
-                    "وٌ ذکْــر"
+                    reminderTitle
                 )
                 .setContentText(
                     dhikr.text
@@ -185,9 +236,21 @@ class ReminderReceiver : BroadcastReceiver() {
         )
 
         /*
-         * جدولة التذكير التالي بنفس الفاصل
-         * الذي اختاره المستخدم.
+         * إعادة جدولة نفس نوع التذكير فقط.
+         *
+         * لا يتم خلط الأذكار العامة
+         * مع أذكار الصباح أو المساء.
          */
-        ReminderScheduler.schedule(context)
+        when (reminderType) {
+
+            ReminderScheduler.TYPE_MORNING ->
+                ReminderScheduler.scheduleMorning(context)
+
+            ReminderScheduler.TYPE_EVENING ->
+                ReminderScheduler.scheduleEvening(context)
+
+            else ->
+                ReminderScheduler.scheduleGeneral(context)
+        }
     }
 }
