@@ -14,16 +14,17 @@ class ReminderReceiver : BroadcastReceiver() {
 
     companion object {
         private const val CHANNEL_ID = "dhikr_reminders_v2"
-        private const val NOTIFICATION_ID = 8800
-        private const val PENDING_INTENT_REQUEST_CODE = 7400
-
-        private const val EXTRA_REMINDER_TYPE = "reminder_type"
+        private const val CHANNEL_NAME = "تذكيرات الذكر"
     }
 
     override fun onReceive(
         context: Context,
-        intent: Intent?
+        intent: Intent
     ) {
+
+        val type =
+            intent.getStringExtra("type")
+                ?: ReminderScheduler.TYPE_GENERAL
 
         val prefs =
             context.getSharedPreferences(
@@ -32,166 +33,185 @@ class ReminderReceiver : BroadcastReceiver() {
             )
 
         /*
-         * إذا كان المستخدم أوقف التذكيرات،
-         * لا نعرض أي تذكير.
+         * التأكد من أن نوع التذكير ما زال مفعّلًا.
+         * هذا يمنع ظهور إشعار إذا تم إيقافه
+         * بعد إنشاء المنبه وقبل تنفيذه.
          */
-        if (
-            !prefs.getBoolean(
-                ReminderScheduler.ENABLED,
-                true
-            )
-        ) {
+        val enabled = when (type) {
+
+            ReminderScheduler.TYPE_MORNING ->
+                prefs.getBoolean(
+                    ReminderScheduler.MORNING_ENABLED,
+                    true
+                )
+
+            ReminderScheduler.TYPE_EVENING ->
+                prefs.getBoolean(
+                    ReminderScheduler.EVENING_ENABLED,
+                    true
+                )
+
+            else ->
+                prefs.getBoolean(
+                    ReminderScheduler.ENABLED,
+                    true
+                )
+        }
+
+        if (!enabled) {
             return
         }
 
-        /*
-         * معرفة نوع التذكير الذي تم تشغيله.
-         */
-        val reminderType =
-            intent?.getStringExtra(
-                EXTRA_REMINDER_TYPE
-            ) ?: ReminderScheduler.TYPE_GENERAL
+        val dhikr = when (type) {
 
-        /*
-         * اختيار قائمة الأذكار حسب نوع التذكير.
-         *
-         * GENERAL  -> الأذكار العامة فقط
-         * MORNING  -> أذكار الصباح فقط
-         * EVENING  -> أذكار المساء فقط
-         */
-        val dhikrList =
-            when (reminderType) {
+            ReminderScheduler.TYPE_MORNING ->
+                getMorningDhikr()
 
-                ReminderScheduler.TYPE_MORNING ->
-                    DhikrRepository.morning
+            ReminderScheduler.TYPE_EVENING ->
+                getEveningDhikr()
 
-                ReminderScheduler.TYPE_EVENING ->
-                    DhikrRepository.evening
-
-                else ->
-                    DhikrRepository.main
-            }
-
-        /*
-         * إذا لم توجد أذكار في القائمة المطلوبة،
-         * نعيد جدولة نفس النوع فقط.
-         */
-        if (dhikrList.isEmpty()) {
-
-            when (reminderType) {
-
-                ReminderScheduler.TYPE_MORNING ->
-                    ReminderScheduler.scheduleMorning(context)
-
-                ReminderScheduler.TYPE_EVENING ->
-                    ReminderScheduler.scheduleEvening(context)
-
-                else ->
-                    ReminderScheduler.scheduleGeneral(context)
-            }
-
-            return
+            else ->
+                getGeneralDhikr()
         }
 
-        /*
-         * اختيار ذكر عشوائي من القائمة الخاصة
-         * بهذا النوع فقط.
-         */
-        val dhikr =
-            dhikrList.random(Random.Default)
+        showNotification(
+            context = context,
+            type = type,
+            dhikr = dhikr
+        )
 
         /*
-         * تحديد عنوان مناسب للتذكير.
+         * إعادة جدولة نفس النوع فقط.
          */
-        val reminderTitle =
-            when (reminderType) {
+        when (type) {
+
+            ReminderScheduler.TYPE_MORNING -> {
+                ReminderScheduler.scheduleMorning(
+                    context
+                )
+            }
+
+            ReminderScheduler.TYPE_EVENING -> {
+                ReminderScheduler.scheduleEvening(
+                    context
+                )
+            }
+
+            else -> {
+                ReminderScheduler.scheduleGeneral(
+                    context
+                )
+            }
+        }
+    }
+
+    // ---------------------------------------------------------
+    // اختيار الذكر
+    // ---------------------------------------------------------
+
+    private fun getGeneralDhikr(): String {
+
+        val list =
+            DhikrRepository.main
+
+        if (list.isEmpty()) {
+            return "سبحان الله والحمد لله ولا إله إلا الله والله أكبر"
+        }
+
+        return list[
+            Random.nextInt(list.size)
+        ].text
+    }
+
+    private fun getMorningDhikr(): String {
+
+        val list =
+            DhikrRepository.morning
+
+        if (list.isEmpty()) {
+            return "أصبحنا وأصبح الملك لله"
+        }
+
+        return list[
+            Random.nextInt(list.size)
+        ].text
+    }
+
+    private fun getEveningDhikr(): String {
+
+        val list =
+            DhikrRepository.evening
+
+        if (list.isEmpty()) {
+            return "أمسينا وأمسى الملك لله"
+        }
+
+        return list[
+            Random.nextInt(list.size)
+        ].text
+    }
+
+    // ---------------------------------------------------------
+    // الإشعار
+    // ---------------------------------------------------------
+
+    private fun showNotification(
+        context: Context,
+        type: String,
+        dhikr: String
+    ) {
+
+        createNotificationChannel(
+            context
+        )
+
+        val title =
+            when (type) {
 
                 ReminderScheduler.TYPE_MORNING ->
-                    "أذكار الصباح"
+                    "🌅 أذكار الصباح"
 
                 ReminderScheduler.TYPE_EVENING ->
-                    "أذكار المساء"
+                    "🌙 أذكار المساء"
 
                 else ->
-                    "ذكر"
+                    "🔔 تذكير بالذكر"
             }
 
         /*
-         * الواجهة المخصصة للتذكير.
+         * عند الضغط على الإشعار نفتح شاشة التذكير
+         * الموجودة في التطبيق.
          */
-        val fullScreenIntent =
+        val activityIntent =
             Intent(
                 context,
                 ReminderActivity::class.java
             ).apply {
 
                 putExtra(
-                    "dhikr_text",
-                    dhikr.text
+                    "dhikr",
+                    dhikr
                 )
 
                 putExtra(
-                    "dhikr_title",
-                    reminderTitle
-                )
-
-                putExtra(
-                    EXTRA_REMINDER_TYPE,
-                    reminderType
+                    "type",
+                    type
                 )
 
                 flags =
                     Intent.FLAG_ACTIVITY_NEW_TASK or
-                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                    Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP
             }
 
-        val fullScreenPendingIntent =
+        val pendingIntent =
             PendingIntent.getActivity(
                 context,
-                PENDING_INTENT_REQUEST_CODE,
-                fullScreenIntent,
+                notificationRequestCode(type),
+                activityIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or
-                    PendingIntent.FLAG_IMMUTABLE
+                        PendingIntent.FLAG_IMMUTABLE
             )
 
-        val manager =
-            context.getSystemService(
-                NotificationManager::class.java
-            )
-
-        /*
-         * إنشاء قناة الإشعارات.
-         */
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-
-            val channel =
-                NotificationChannel(
-                    CHANNEL_ID,
-                    "تذكيرات وذكر",
-                    NotificationManager.IMPORTANCE_HIGH
-                ).apply {
-
-                    description =
-                        "تنبيهات تذكير الأذكار من تطبيق وذكر"
-
-                    enableVibration(true)
-
-                    setSound(
-                        null,
-                        null
-                    )
-
-                    lockscreenVisibility =
-                        android.app.Notification.VISIBILITY_PUBLIC
-                }
-
-            manager.createNotificationChannel(channel)
-        }
-
-        /*
-         * بناء الإشعار.
-         */
         val notification =
             NotificationCompat.Builder(
                 context,
@@ -201,56 +221,98 @@ class ReminderReceiver : BroadcastReceiver() {
                     android.R.drawable.ic_popup_reminder
                 )
                 .setContentTitle(
-                    reminderTitle
+                    title
                 )
                 .setContentText(
-                    dhikr.text
+                    dhikr
                 )
                 .setStyle(
-                    NotificationCompat
-                        .BigTextStyle()
-                        .bigText(dhikr.text)
+                    NotificationCompat.BigTextStyle()
+                        .bigText(dhikr)
                 )
+                .setContentIntent(
+                    pendingIntent
+                )
+                .setAutoCancel(true)
                 .setPriority(
-                    NotificationCompat.PRIORITY_MAX
+                    NotificationCompat.PRIORITY_HIGH
                 )
                 .setCategory(
                     NotificationCompat.CATEGORY_REMINDER
                 )
-                .setVisibility(
-                    NotificationCompat.VISIBILITY_PUBLIC
-                )
-                .setAutoCancel(true)
-                .setContentIntent(
-                    fullScreenPendingIntent
-                )
-                .setFullScreenIntent(
-                    fullScreenPendingIntent,
-                    true
-                )
                 .build()
 
+        val manager =
+            context.getSystemService(
+                Context.NOTIFICATION_SERVICE
+            ) as NotificationManager
+
         manager.notify(
-            NOTIFICATION_ID,
+            notificationRequestCode(type),
             notification
         )
+    }
 
-        /*
-         * إعادة جدولة نفس نوع التذكير فقط.
-         *
-         * لا يتم خلط الأذكار العامة
-         * مع أذكار الصباح أو المساء.
-         */
-        when (reminderType) {
+    private fun notificationRequestCode(
+        type: String
+    ): Int {
+
+        return when (type) {
 
             ReminderScheduler.TYPE_MORNING ->
-                ReminderScheduler.scheduleMorning(context)
+                8101
 
             ReminderScheduler.TYPE_EVENING ->
-                ReminderScheduler.scheduleEvening(context)
+                8102
 
             else ->
-                ReminderScheduler.scheduleGeneral(context)
+                8100
         }
+    }
+
+    // ---------------------------------------------------------
+    // قناة الإشعارات
+    // ---------------------------------------------------------
+
+    private fun createNotificationChannel(
+        context: Context
+    ) {
+
+        if (Build.VERSION.SDK_INT < 26) {
+            return
+        }
+
+        val manager =
+            context.getSystemService(
+                Context.NOTIFICATION_SERVICE
+            ) as NotificationManager
+
+        val existing =
+            manager.getNotificationChannel(
+                CHANNEL_ID
+            )
+
+        if (existing != null) {
+            return
+        }
+
+        val channel =
+            NotificationChannel(
+                CHANNEL_ID,
+                CHANNEL_NAME,
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+
+                description =
+                    "تذكيرات الأذكار في تطبيق وٌ ذکْــر"
+
+                enableVibration(true)
+
+                setShowBadge(true)
+            }
+
+        manager.createNotificationChannel(
+            channel
+        )
     }
 }
