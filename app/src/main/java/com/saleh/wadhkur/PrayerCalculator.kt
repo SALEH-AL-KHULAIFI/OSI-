@@ -2,7 +2,9 @@ package com.saleh.wadhkur
 
 import java.util.Calendar
 import java.util.Locale
+import kotlin.math.abs
 import kotlin.math.acos
+import kotlin.math.atan
 import kotlin.math.cos
 import kotlin.math.roundToInt
 import kotlin.math.sin
@@ -28,21 +30,11 @@ object PrayerCalculator {
         val safeLatitude = latitude.coerceIn(-90.0, 90.0)
         val safeLongitude = longitude.coerceIn(-180.0, 180.0)
 
-        /*
-         * اليوم من السنة.
-         */
         val day = date.get(Calendar.DAY_OF_YEAR)
 
-        /*
-         * المعامل الفلكي.
-         */
         val gamma =
             2.0 * Math.PI / 365.0 * (day - 1)
 
-        /*
-         * معادلة الزمن Equation of Time
-         * بالدقائق.
-         */
         val equationOfTime =
             229.18 * (
                 0.000075 +
@@ -52,10 +44,6 @@ object PrayerCalculator {
                     0.040849 * sin(2.0 * gamma)
                 )
 
-        /*
-         * ميل الشمس Solar Declination
-         * بالراديان.
-         */
         val declination =
             0.006918 -
                 0.399912 * cos(gamma) +
@@ -65,32 +53,16 @@ object PrayerCalculator {
                 0.002697 * cos(3.0 * gamma) +
                 0.001480 * sin(3.0 * gamma)
 
-        /*
-         * فرق المنطقة الزمنية عن UTC بالساعات.
-         *
-         * نستخدم المنطقة الزمنية الفعلية للجهاز
-         * مع أخذ التوقيت الصيفي إن وجد في الاعتبار.
-         */
         val timezone =
             date.timeZone.getOffset(date.timeInMillis) /
                 3_600_000.0
 
-        /*
-         * الظهر الشمسي Solar Noon
-         * بالدقائق منذ منتصف الليل المحلي.
-         */
         val solarNoon =
             720.0 -
                 4.0 * safeLongitude -
                 equationOfTime +
                 60.0 * timezone
 
-        /*
-         * الشروق والغروب.
-         *
-         * زاوية -0.833 درجة تأخذ انكسار الضوء
-         * وقرص الشمس في الاعتبار.
-         */
         val sunriseHourAngle =
             hourAngle(
                 latitude = safeLatitude,
@@ -98,10 +70,6 @@ object PrayerCalculator {
                 altitude = -0.833
             )
 
-        /*
-         * الفجر:
-         * زاوية الشمس -18 درجة.
-         */
         val fajrHourAngle =
             hourAngle(
                 latitude = safeLatitude,
@@ -109,10 +77,6 @@ object PrayerCalculator {
                 altitude = -18.0
             )
 
-        /*
-         * العشاء:
-         * زاوية الشمس -17 درجة.
-         */
         val ishaHourAngle =
             hourAngle(
                 latitude = safeLatitude,
@@ -121,25 +85,18 @@ object PrayerCalculator {
             )
 
         /*
-         * العصر — طريقة الظل 1.
-         *
-         * نستخدم زاوية ارتفاع الشمس الناتجة
-         * من طول الظل القياسي للمذهب الذي يعتمد
-         * عامل الظل = 1.
-         *
-         * tan(altitude) =
-         * 1 / (1 + tan(|latitude - declination|))
+         * العصر — طريقة الظل 1
          */
         val latitudeRadians =
             Math.toRadians(safeLatitude)
 
         val solarNoonAltitude =
-            kotlin.math.abs(
+            abs(
                 latitudeRadians - declination
             )
 
         val asrAltitudeRadians =
-            kotlin.math.atan(
+            atan(
                 1.0 /
                     (
                         1.0 +
@@ -148,9 +105,7 @@ object PrayerCalculator {
             )
 
         val asrAltitude =
-            Math.toDegrees(
-                asrAltitudeRadians
-            )
+            Math.toDegrees(asrAltitudeRadians)
 
         val asrHourAngle =
             hourAngle(
@@ -159,53 +114,31 @@ object PrayerCalculator {
                 altitude = asrAltitude
             )
 
-        /*
-         * تحويل النتائج إلى أوقات محلية.
-         */
         return PrayerTimes(
-
-            /*
-             * الفجر.
-             */
             fajr = formatTime(
                 solarNoon -
                     4.0 * fajrHourAngle
             ),
 
-            /*
-             * الشروق.
-             */
             sunrise = formatTime(
                 solarNoon -
                     4.0 * sunriseHourAngle
             ),
 
-            /*
-             * الظهر.
-             */
             dhuhr = formatTime(
                 solarNoon
             ),
 
-            /*
-             * العصر.
-             */
             asr = formatTime(
                 solarNoon +
                     4.0 * asrHourAngle
             ),
 
-            /*
-             * المغرب.
-             */
             maghrib = formatTime(
                 solarNoon +
                     4.0 * sunriseHourAngle
             ),
 
-            /*
-             * العشاء.
-             */
             isha = formatTime(
                 solarNoon +
                     4.0 * ishaHourAngle
@@ -213,18 +146,6 @@ object PrayerCalculator {
         )
     }
 
-    /**
-     * حساب زاوية الساعة للشمس.
-     *
-     * latitude:
-     * خط العرض بالدرجات.
-     *
-     * declination:
-     * ميل الشمس بالراديان.
-     *
-     * altitude:
-     * ارتفاع الشمس المطلوب بالدرجات.
-     */
     private fun hourAngle(
         latitude: Double,
         declination: Double,
@@ -241,12 +162,7 @@ object PrayerCalculator {
             cos(latitudeRadians) *
                 cos(declination)
 
-        /*
-         * حماية من القسمة على صفر.
-         */
-        if (
-            kotlin.math.abs(denominator) < 1e-10
-        ) {
+        if (abs(denominator) < 1e-10) {
             return 0.0
         }
 
@@ -257,9 +173,6 @@ object PrayerCalculator {
                     sin(declination)
                 ) / denominator
 
-        /*
-         * حماية من أخطاء الفاصلة العائمة.
-         */
         cosineHourAngle =
             cosineHourAngle.coerceIn(
                 -1.0,
@@ -271,17 +184,10 @@ object PrayerCalculator {
         )
     }
 
-    /**
-     * تحويل الدقائق منذ منتصف الليل
-     * إلى نظام 12 ساعة باللغة العربية.
-     */
     private fun formatTime(
         minutes: Double
     ): String {
 
-        /*
-         * تطبيع الوقت إلى 24 ساعة.
-         */
         var normalized =
             minutes % 1440.0
 
@@ -289,15 +195,9 @@ object PrayerCalculator {
             normalized += 1440.0
         }
 
-        /*
-         * التقريب إلى أقرب دقيقة.
-         */
         var totalMinutes =
             normalized.roundToInt()
 
-        /*
-         * حماية إضافية.
-         */
         totalMinutes %= 1440
 
         val hour24 =
@@ -306,9 +206,6 @@ object PrayerCalculator {
         val minute =
             totalMinutes % 60
 
-        /*
-         * صباح / مساء.
-         */
         val suffix =
             if (hour24 >= 12) {
                 "م"
@@ -316,9 +213,6 @@ object PrayerCalculator {
                 "ص"
             }
 
-        /*
-         * تحويل 24 ساعة إلى 12 ساعة.
-         */
         val displayHour =
             when {
                 hour24 == 0 -> 12
@@ -327,11 +221,11 @@ object PrayerCalculator {
             }
 
         return String.format(
-            Locale(\"ar\"),
-            \"%02d:%02d %s\",
+            Locale("ar"),
+            "%02d:%02d %s",
             displayHour,
             minute,
             suffix
         )
     }
-            }
+}
