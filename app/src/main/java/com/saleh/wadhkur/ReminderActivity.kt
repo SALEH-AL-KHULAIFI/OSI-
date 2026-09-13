@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -34,6 +33,7 @@ class ReminderActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // إظهار شاشة التذكير فوق شاشة القفل وتشغيل الشاشة
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
@@ -43,13 +43,36 @@ class ReminderActivity : ComponentActivity() {
             WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
         )
 
+        /*
+         * ReminderReceiver يرسل النص في:
+         * "dhikr"
+         *
+         * وندعم أيضًا الاسم القديم:
+         * "dhikr_text"
+         */
         val dhikrText =
-            intent.getStringExtra("dhikr_text")
+            intent.getStringExtra("dhikr")
+                ?: intent.getStringExtra("dhikr_text")
                 ?: "سبحان الله وبحمده"
 
-        val dhikrTitle =
-            intent.getStringExtra("dhikr_title")
-                ?: "تذكير بالذكر"
+        /*
+         * تحديد نوع التذكير القادم من ReminderReceiver
+         */
+        val type = intent.getStringExtra("type")
+
+        /*
+         * عنوان الشاشة حسب نوع التذكير
+         */
+        val dhikrTitle = when (type) {
+            ReminderScheduler.TYPE_MORNING ->
+                "🌅 أذكار الصباح"
+
+            ReminderScheduler.TYPE_EVENING ->
+                "🌙 أذكار المساء"
+
+            else ->
+                "🔔 تذكير بالذكر"
+        }
 
         setContent {
             ReminderScreen(
@@ -69,46 +92,49 @@ private fun ReminderScreen(
     text: String,
     onClose: () -> Unit
 ) {
-
-    val background = Color(0xFF050B10)
-    val neonCyan = Color(0xFF00E5FF)
-    val neonGreen = Color(0xFF00FF9D)
-
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(background)
-            .padding(20.dp),
-        contentAlignment = Alignment.Center
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        Color(0xFF06131A),
+                        Color(0xFF081D24),
+                        Color(0xFF031015)
+                    )
+                )
+            )
+            .padding(24.dp)
     ) {
 
         Column(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
 
             Text(
                 text = "وٌ ذکْــر",
-                color = neonCyan,
+                color = Color(0xFF00E5FF),
                 fontSize = 30.sp,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center
             )
 
             Spacer(
-                modifier = Modifier.height(10.dp)
+                modifier = Modifier.height(8.dp)
             )
 
             Text(
-                text = "تذكير بالذكر",
-                color = Color.LightGray,
-                fontSize = 16.sp,
+                text = title,
+                color = Color(0xFF80DEEA),
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center
             )
 
             Spacer(
-                modifier = Modifier.height(30.dp)
+                modifier = Modifier.height(28.dp)
             )
 
             Box(
@@ -117,9 +143,8 @@ private fun ReminderScreen(
                     .background(
                         brush = Brush.linearGradient(
                             colors = listOf(
-                                neonCyan,
-                                neonGreen,
-                                neonCyan
+                                Color(0xFF00E5FF),
+                                Color(0xFF00FF9D)
                             )
                         ),
                         shape = RoundedCornerShape(24.dp)
@@ -127,74 +152,61 @@ private fun ReminderScreen(
                     .padding(2.dp)
             ) {
 
-                Column(
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .background(
-                            Color(0xFF0B151C),
-                            RoundedCornerShape(22.dp)
+                            color = Color(0xFF081B21),
+                            shape = RoundedCornerShape(22.dp)
                         )
                         .padding(
                             horizontal = 22.dp,
                             vertical = 30.dp
                         ),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                    contentAlignment = Alignment.Center
                 ) {
-
-                    Text(
-                        text = title,
-                        color = neonGreen,
-                        fontSize = 19.sp,
-                        fontWeight = FontWeight.Bold,
-                        textAlign = TextAlign.Center
-                    )
-
-                    Spacer(
-                        modifier = Modifier.height(22.dp)
-                    )
 
                     Text(
                         text = text,
                         color = Color.White,
-                        fontSize = 23.sp,
-                        lineHeight = 38.sp,
-                        fontWeight = FontWeight.Medium,
+                        fontSize = 25.sp,
+                        fontWeight = FontWeight.Bold,
+                        lineHeight = 40.sp,
                         textAlign = TextAlign.Center
                     )
                 }
             }
 
             Spacer(
-                modifier = Modifier.height(35.dp)
+                modifier = Modifier.height(32.dp)
             )
 
             Button(
                 onClick = onClose,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(58.dp),
+                    .height(56.dp),
                 shape = RoundedCornerShape(18.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF00C98B),
-                    contentColor = Color.Black
+                    containerColor = Color(0xFF00CFA3),
+                    contentColor = Color.White
                 )
             ) {
-
                 Text(
                     text = "رددته ✓",
-                    fontSize = 19.sp,
+                    fontSize = 18.sp,
                     fontWeight = FontWeight.Bold
                 )
             }
 
             Spacer(
-                modifier = Modifier.height(14.dp)
+                modifier = Modifier.height(28.dp)
             )
 
             Text(
-                text = "واذكر ربك إذا نسيت",
-                color = Color(0xFF8FA3AD),
-                fontSize = 14.sp,
+                text = "وَاذْكُر رَّبَّكَ إِذَا نَسِيتَ",
+                color = Color(0xFF80DEEA),
+                fontSize = 16.sp,
                 textAlign = TextAlign.Center
             )
         }
