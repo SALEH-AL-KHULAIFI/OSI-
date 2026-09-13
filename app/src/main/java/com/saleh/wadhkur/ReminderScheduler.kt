@@ -4,6 +4,7 @@ import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import java.util.Calendar
 
 object ReminderScheduler {
@@ -127,34 +128,13 @@ object ReminderScheduler {
 
         val calendar = Calendar.getInstance().apply {
 
-            set(
-                Calendar.HOUR_OF_DAY,
-                6
-            )
+            set(Calendar.HOUR_OF_DAY, 6)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
 
-            set(
-                Calendar.MINUTE,
-                0
-            )
-
-            set(
-                Calendar.SECOND,
-                0
-            )
-
-            set(
-                Calendar.MILLISECOND,
-                0
-            )
-
-            if (
-                timeInMillis <=
-                System.currentTimeMillis()
-            ) {
-                add(
-                    Calendar.DAY_OF_YEAR,
-                    1
-                )
+            if (timeInMillis <= System.currentTimeMillis()) {
+                add(Calendar.DAY_OF_YEAR, 1)
             }
         }
 
@@ -193,34 +173,13 @@ object ReminderScheduler {
 
         val calendar = Calendar.getInstance().apply {
 
-            set(
-                Calendar.HOUR_OF_DAY,
-                17
-            )
+            set(Calendar.HOUR_OF_DAY, 17)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
 
-            set(
-                Calendar.MINUTE,
-                0
-            )
-
-            set(
-                Calendar.SECOND,
-                0
-            )
-
-            set(
-                Calendar.MILLISECOND,
-                0
-            )
-
-            if (
-                timeInMillis <=
-                System.currentTimeMillis()
-            ) {
-                add(
-                    Calendar.DAY_OF_YEAR,
-                    1
-                )
+            if (timeInMillis <= System.currentTimeMillis()) {
+                add(Calendar.DAY_OF_YEAR, 1)
             }
         }
 
@@ -278,11 +237,34 @@ object ReminderScheduler {
                         PendingIntent.FLAG_IMMUTABLE
             )
 
-        alarmManager.setAndAllowWhileIdle(
-            AlarmManager.RTC_WAKEUP,
-            triggerAtMillis,
-            pendingIntent
-        )
+        /*
+         * Android 12 وما بعده:
+         * نحاول استخدام Exact Alarm حتى يكون التذكير
+         * في الوقت المحدد قدر الإمكان.
+         *
+         * إذا لم تكن صلاحية Exact Alarm متاحة،
+         * نستخدم الطريقة الآمنة البديلة.
+         */
+
+        if (
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            alarmManager.canScheduleExactAlarms()
+        ) {
+
+            alarmManager.setExactAndAllowWhileIdle(
+                AlarmManager.RTC_WAKEUP,
+                triggerAtMillis,
+                pendingIntent
+            )
+
+        } else {
+
+            alarmManager.setAndAllowWhileIdle(
+                AlarmManager.RTC_WAKEUP,
+                triggerAtMillis,
+                pendingIntent
+            )
+        }
     }
 
     // ---------------------------------------------------------
