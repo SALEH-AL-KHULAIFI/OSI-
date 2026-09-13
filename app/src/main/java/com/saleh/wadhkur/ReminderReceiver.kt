@@ -32,11 +32,6 @@ class ReminderReceiver : BroadcastReceiver() {
                 Context.MODE_PRIVATE
             )
 
-        /*
-         * التأكد من أن نوع التذكير ما زال مفعّلًا.
-         * هذا يمنع ظهور إشعار إذا تم إيقافه
-         * بعد إنشاء المنبه وقبل تنفيذه.
-         */
         val enabled = when (type) {
 
             ReminderScheduler.TYPE_MORNING ->
@@ -80,9 +75,6 @@ class ReminderReceiver : BroadcastReceiver() {
             dhikr = dhikr
         )
 
-        /*
-         * إعادة جدولة نفس النوع فقط.
-         */
         when (type) {
 
             ReminderScheduler.TYPE_MORNING -> {
@@ -178,10 +170,6 @@ class ReminderReceiver : BroadcastReceiver() {
                     "🔔 تذكير بالذكر"
             }
 
-        /*
-         * عند الضغط على الإشعار نفتح شاشة التذكير
-         * الموجودة في التطبيق.
-         */
         val activityIntent =
             Intent(
                 context,
@@ -218,7 +206,7 @@ class ReminderReceiver : BroadcastReceiver() {
                 CHANNEL_ID
             )
                 .setSmallIcon(
-                    android.R.drawable.ic_popup_reminder
+                    R.mipmap.ic_launcher
                 )
                 .setContentTitle(
                     title
