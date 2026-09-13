@@ -48,10 +48,25 @@ class MainActivity : ComponentActivity() {
     private val card2 = Color(0xFF101F28)
     private val muted = Color(0xFF9AAFB8)
 
+    /*
+     * رقم يتغير عند تحديث الموقع.
+     *
+     * لا نستخدم recreate() بعد الآن.
+     * هذا المتغير يجعل Compose يعيد قراءة الموقع
+     * من SharedPreferences ويحدث واجهة الصلاة مباشرة.
+     */
+    private var locationUpdateVersion by mutableIntStateOf(0)
+
     private val locationLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { result ->
-        if (result.values.any { it }) {
+
+        val granted =
+            result[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+                result[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+
+        if (granted) {
+
             saveBestLocation()
 
             Toast.makeText(
@@ -59,7 +74,9 @@ class MainActivity : ComponentActivity() {
                 "تم تحديث موقع مواقيت الصلاة",
                 Toast.LENGTH_SHORT
             ).show()
+
         } else {
+
             Toast.makeText(
                 this,
                 "لم يتم السماح بالموقع",
@@ -81,6 +98,7 @@ class MainActivity : ComponentActivity() {
             WadhkurTheme {
                 WadhkurApp(
                     requestedDhikr = requestedDhikr,
+                    locationUpdateVersion = locationUpdateVersion,
                     onRequestLocation = {
                         requestLocation()
                     }
@@ -92,12 +110,14 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun requestNotifications() {
+
         if (
             Build.VERSION.SDK_INT >= 33 &&
             checkSelfPermission(
                 Manifest.permission.POST_NOTIFICATIONS
             ) != PackageManager.PERMISSION_GRANTED
         ) {
+
             requestPermissions(
                 arrayOf(
                     Manifest.permission.POST_NOTIFICATIONS
@@ -129,6 +149,7 @@ class MainActivity : ComponentActivity() {
             )
 
         } else {
+
             saveBestLocation()
         }
     }
@@ -136,15 +157,20 @@ class MainActivity : ComponentActivity() {
     /*
      * الحصول على موقع الهاتف بشكل موثوق.
      *
-     * لا نعتمد فقط على LastKnownLocation.
-     * نستخدم الموقع المحفوظ كاستجابة سريعة إن وجد،
-     * ثم نطلب موقعًا حديثًا من النظام لتحديث الإحداثيات.
+     * المنهج:
+     *
+     * 1. التأكد من وجود إذن الموقع.
+     * 2. التأكد من أن خدمة الموقع مفعلة.
+     * 3. استخدام LastKnownLocation كاستجابة سريعة.
+     * 4. طلب موقع حديث من النظام.
+     * 5. حفظ أفضل إحداثيات في SharedPreferences.
+     * 6. تحديث Compose مباشرة بدون recreate().
      */
     private fun saveBestLocation() {
 
         val manager =
             getSystemService(Context.LOCATION_SERVICE)
-                    as LocationManager
+                as LocationManager
 
         val hasFine =
             checkSelfPermission(
@@ -197,20 +223,28 @@ class MainActivity : ComponentActivity() {
 
             locationSaved = true
 
-            runOnUiThread {
-                recreate()
-            }
+            /*
+             * مهم جدًا:
+             *
+             * لا نستخدم recreate() هنا.
+             * تحديث متغير Compose يكفي لإعادة رسم
+             * واجهة مواقيت الصلاة بالموقع الجديد.
+             */
+            locationUpdateVersion++
         }
 
         try {
 
             /*
-             * التأكد أولًا من أن خدمة الموقع مفعلة.
+             * التأكد من أن خدمة الموقع مفعلة.
              */
             val locationEnabled =
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+
                     manager.isLocationEnabled
+
                 } else {
+
                     manager.isProviderEnabled(
                         LocationManager.GPS_PROVIDER
                     ) ||
@@ -231,8 +265,10 @@ class MainActivity : ComponentActivity() {
             }
 
             /*
-             * نحصل على آخر موقع متاح من جميع المزودين.
-             * هذا يعطي نتيجة سريعة إذا كان النظام يملك موقعًا محفوظًا.
+             * الحصول على آخر موقع متاح.
+             *
+             * نبحث في جميع المزودين المتاحين ونختار
+             * الموقع الأفضل من حيث الدقة.
              */
             var bestLocation: Location? = null
 
@@ -249,9 +285,23 @@ class MainActivity : ComponentActivity() {
                     if (location != null) {
 
                         if (
+                            !location.latitude.isFinite() ||
+                            !location.longitude.isFinite()
+                        ) {
+                            continue
+                        }
+
+                        if (
+                            location.latitude !in -90.0..90.0 ||
+                            location.longitude !in -180.0..180.0
+                        ) {
+                            continue
+                        }
+
+                        if (
                             bestLocation == null ||
                             location.accuracy <
-                            bestLocation!!.accuracy
+                            bestLocation.accuracy
                         ) {
                             bestLocation = location
                         }
@@ -261,21 +311,27 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
+            /*
+             * حفظ الموقع القديم/السريع أولًا.
+             */
             if (bestLocation != null) {
-                saveLocation(bestLocation!!)
+                saveLocation(bestLocation)
             }
 
             /*
-             * بعد الموقع المحفوظ، نطلب موقعًا حديثًا أيضًا.
-             *
              * Android 11 وما بعده:
-             * نستخدم getCurrentLocation للحصول على قراءة حديثة
-             * بدل الاعتماد على موقع قديم.
+             *
+             * نطلب موقعًا حديثًا من النظام.
+             *
+             * نفضّل NETWORK لأنه غالبًا أسرع في تحديد
+             * الموقع داخل المدن، وإذا لم يكن متاحًا
+             * نستخدم GPS.
              */
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
 
                 val provider =
                     when {
+
                         manager.isProviderEnabled(
                             LocationManager.NETWORK_PROVIDER
                         ) ->
@@ -286,17 +342,21 @@ class MainActivity : ComponentActivity() {
                         ) ->
                             LocationManager.GPS_PROVIDER
 
-                        else -> null
+                        else ->
+                            null
                     }
 
                 if (provider == null) {
+
                     if (!locationSaved) {
+
                         Toast.makeText(
                             this,
                             "تعذر تحديد موقع الهاتف",
                             Toast.LENGTH_SHORT
                         ).show()
                     }
+
                     return
                 }
 
@@ -307,26 +367,30 @@ class MainActivity : ComponentActivity() {
                 ) { location ->
 
                     if (location != null) {
+
                         saveLocation(location)
+
                     } else if (!locationSaved) {
-                        runOnUiThread {
-                            Toast.makeText(
-                                this,
-                                "تعذر الحصول على الموقع الحالي",
-                                Toast.LENGTH_SHORT
-                            ).show()
-                        }
+
+                        Toast.makeText(
+                            this,
+                            "تعذر الحصول على الموقع الحالي",
+                            Toast.LENGTH_SHORT
+                        ).show()
                     }
                 }
 
             } else {
 
                 /*
-                 * للأجهزة الأقدم من Android 11:
-                 * نستخدم LocationListener للحصول على موقع حديث.
+                 * Android 10 وما قبله:
+                 *
+                 * نستخدم LocationListener للحصول
+                 * على أول قراءة حديثة.
                  */
                 val provider =
                     when {
+
                         manager.isProviderEnabled(
                             LocationManager.NETWORK_PROVIDER
                         ) ->
@@ -337,12 +401,14 @@ class MainActivity : ComponentActivity() {
                         ) ->
                             LocationManager.GPS_PROVIDER
 
-                        else -> null
+                        else ->
+                            null
                     }
 
                 if (provider == null) {
 
                     if (!locationSaved) {
+
                         Toast.makeText(
                             this,
                             "تعذر تحديد موقع الهاتف",
@@ -359,6 +425,7 @@ class MainActivity : ComponentActivity() {
                         override fun onLocationChanged(
                             location: Location
                         ) {
+
                             saveLocation(location)
 
                             try {
@@ -398,8 +465,20 @@ class MainActivity : ComponentActivity() {
     @Composable
     private fun WadhkurApp(
         requestedDhikr: String?,
+        locationUpdateVersion: Int,
         onRequestLocation: () -> Unit
     ) {
+
+        /*
+         * قراءة هذا المتغير هنا مهمة:
+         *
+         * عندما يتم حفظ موقع جديد، يتغير
+         * locationUpdateVersion، فيعيد Compose
+         * تركيب الواجهة التي تعتمد على الموقع.
+         *
+         * لا نحتاج إلى recreate().
+         */
+        val currentLocationVersion = locationUpdateVersion
 
         var screen by remember {
             mutableStateOf("home")
@@ -418,6 +497,7 @@ class MainActivity : ComponentActivity() {
             when (screen) {
 
                 "home" -> HomeScreen(
+                    locationUpdateVersion = currentLocationVersion,
                     onDhikr = {
                         screen = "dhikr"
                     },
@@ -444,6 +524,7 @@ class MainActivity : ComponentActivity() {
                 }
 
                 "prayer" -> PrayerScreen(
+                    locationUpdateVersion = currentLocationVersion,
                     onBack = {
                         screen = "home"
                     },
@@ -473,12 +554,20 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     private fun HomeScreen(
+        locationUpdateVersion: Int,
         onDhikr: () -> Unit,
         onReminders: () -> Unit,
         onPrayer: () -> Unit,
         onAbout: () -> Unit,
         onTasbeeh: () -> Unit
     ) {
+
+        /*
+         * نستخدم القيمة حتى تكون HomeScreen
+         * مرتبطة بتحديث الموقع.
+         */
+        val currentLocationVersion =
+            locationUpdateVersion
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -488,7 +577,8 @@ class MainActivity : ComponentActivity() {
                 top = 14.dp,
                 bottom = 24.dp
             ),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement =
+                Arrangement.spacedBy(12.dp)
         ) {
 
             item {
@@ -500,7 +590,10 @@ class MainActivity : ComponentActivity() {
             }
 
             item {
-                NextPrayerCard()
+                NextPrayerCard(
+                    locationUpdateVersion =
+                        currentLocationVersion
+                )
             }
 
             item {
@@ -560,7 +653,8 @@ class MainActivity : ComponentActivity() {
                     horizontal = 20.dp,
                     vertical = 16.dp
                 ),
-            horizontalAlignment = Alignment.CenterHorizontally
+            horizontalAlignment =
+                Alignment.CenterHorizontally
         ) {
 
             Text(
@@ -779,7 +873,15 @@ class MainActivity : ComponentActivity() {
     }
 
     @Composable
-    private fun NextPrayerCard() {
+    private fun NextPrayerCard(
+        locationUpdateVersion: Int
+    ) {
+
+        /*
+         * قراءة المتغير تربط البطاقة بتحديث الموقع.
+         */
+        val currentLocationVersion =
+            locationUpdateVersion
 
         val locationPrefs =
             getSharedPreferences(
@@ -798,6 +900,12 @@ class MainActivity : ComponentActivity() {
                 "lon",
                 Float.NaN
             )
+
+        /*
+         * استخدام القيمة يمنع اعتبارها غير مستخدمة
+         * ويضمن إعادة تركيب البطاقة عند تغير الموقع.
+         */
+        currentLocationVersion.hashCode()
 
         if (lat.isNaN() || lon.isNaN()) {
 
@@ -1001,9 +1109,12 @@ class MainActivity : ComponentActivity() {
 
         val remaining =
             if (fajrTime != null) {
+
                 fajrTime.timeInMillis -
                     now.timeInMillis
+
             } else {
+
                 0L
             }
 
@@ -1526,10 +1637,13 @@ class MainActivity : ComponentActivity() {
                             .apply()
 
                         if (enabled) {
+
                             ReminderScheduler.scheduleGeneral(
                                 this@MainActivity
                             )
+
                         } else {
+
                             ReminderScheduler.cancelGeneral(
                                 this@MainActivity
                             )
@@ -1588,6 +1702,7 @@ class MainActivity : ComponentActivity() {
                                             if (
                                                 generalEnabled
                                             ) {
+
                                                 ReminderScheduler
                                                     .scheduleGeneral(
                                                         this@MainActivity
@@ -1596,6 +1711,7 @@ class MainActivity : ComponentActivity() {
                                         },
 
                                         label = {
+
                                             Text(
                                                 if (
                                                     value == 60
@@ -1615,6 +1731,7 @@ class MainActivity : ComponentActivity() {
                                 repeat(
                                     3 - row.size
                                 ) {
+
                                     Spacer(
                                         Modifier.weight(1f)
                                     )
@@ -1629,6 +1746,7 @@ class MainActivity : ComponentActivity() {
             }
 
             item {
+
                 ReminderCard(
                     icon = "🌅",
                     title = "أذكار الصباح",
@@ -1647,10 +1765,13 @@ class MainActivity : ComponentActivity() {
                             .apply()
 
                         if (enabled) {
+
                             ReminderScheduler.scheduleMorning(
                                 this@MainActivity
                             )
+
                         } else {
+
                             ReminderScheduler.cancelMorning(
                                 this@MainActivity
                             )
@@ -1667,6 +1788,7 @@ class MainActivity : ComponentActivity() {
             }
 
             item {
+
                 ReminderCard(
                     icon = "🌙",
                     title = "أذكار المساء",
@@ -1685,10 +1807,13 @@ class MainActivity : ComponentActivity() {
                             .apply()
 
                         if (enabled) {
+
                             ReminderScheduler.scheduleEvening(
                                 this@MainActivity
                             )
+
                         } else {
+
                             ReminderScheduler.cancelEvening(
                                 this@MainActivity
                             )
@@ -1778,9 +1903,18 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     private fun PrayerScreen(
+        locationUpdateVersion: Int,
         onBack: () -> Unit,
         onLocation: () -> Unit
     ) {
+
+        /*
+         * ربط الشاشة بتحديث الموقع بدون recreate().
+         */
+        val currentLocationVersion =
+            locationUpdateVersion
+
+        currentLocationVersion.hashCode()
 
         val locationPrefs =
             getSharedPreferences(
@@ -1808,24 +1942,28 @@ class MainActivity : ComponentActivity() {
                 !lat.isNaN() &&
                 !lon.isNaN()
             ) {
+
                 PrayerCalculator.calculate(
                     lat.toDouble(),
                     lon.toDouble(),
                     now
                 )
+
             } else {
+
                 null
             }
 
         val nextName =
-            if (
-                times != null
-            ) {
+            if (times != null) {
+
                 getNextPrayerInfo(
                     lat.toDouble(),
                     lon.toDouble()
                 ).name
+
             } else {
+
                 ""
             }
 
@@ -1837,6 +1975,7 @@ class MainActivity : ComponentActivity() {
         ) {
 
             item {
+
                 TopBar(
                     "مواقيت الصلاة",
                     onBack
@@ -1894,6 +2033,7 @@ class MainActivity : ComponentActivity() {
                             Button(
                                 onClick = onLocation
                             ) {
+
                                 Text(
                                     "السماح بالموقع"
                                 )
@@ -1974,6 +2114,7 @@ class MainActivity : ComponentActivity() {
                                 .fillMaxWidth()
                                 .then(
                                     if (isNext) {
+
                                         Modifier.border(
                                             1.dp,
                                             green,
@@ -1981,7 +2122,9 @@ class MainActivity : ComponentActivity() {
                                                 18.dp
                                             )
                                         )
+
                                     } else {
+
                                         Modifier
                                     }
                                 )
@@ -2000,11 +2143,13 @@ class MainActivity : ComponentActivity() {
 
                             Text(
                                 when (item.first) {
+
                                     "الفجر" -> "🌅"
                                     "الظهر" -> "☀️"
                                     "العصر" -> "🌤️"
                                     "المغرب" -> "🌇"
                                     "العشاء" -> "🌙"
+
                                     else -> "🕌"
                                 },
                                 fontSize = 25.sp
@@ -2042,7 +2187,8 @@ class MainActivity : ComponentActivity() {
                                         cyan
                                     },
                                 fontSize = 17.sp,
-                                fontWeight = FontWeight.Bold
+                                fontWeight =
+                                    FontWeight.Bold
                             )
                         }
                     }
@@ -2121,6 +2267,7 @@ class MainActivity : ComponentActivity() {
         ) {
 
             item {
+
                 TopBar(
                     "المسبحة",
                     onBack
@@ -2128,6 +2275,7 @@ class MainActivity : ComponentActivity() {
             }
 
             item {
+
                 Box {
 
                     OutlinedButton(
@@ -2166,6 +2314,7 @@ class MainActivity : ComponentActivity() {
 
                             DropdownMenuItem(
                                 text = {
+
                                     Text(
                                         dhikr,
                                         textAlign =
@@ -2192,6 +2341,7 @@ class MainActivity : ComponentActivity() {
             }
 
             item {
+
                 Spacer(
                     Modifier.height(14.dp)
                 )
@@ -2206,9 +2356,15 @@ class MainActivity : ComponentActivity() {
 
                         Text(
                             when (target) {
-                                33 -> "الهدف: 33"
-                                100 -> "الهدف: 100"
-                                else -> "بدون حد"
+
+                                33 ->
+                                    "الهدف: 33"
+
+                                100 ->
+                                    "الهدف: 100"
+
+                                else ->
+                                    "بدون حد"
                             },
                             color = cyan
                         )
@@ -2227,6 +2383,7 @@ class MainActivity : ComponentActivity() {
                                 Text("33")
                             },
                             onClick = {
+
                                 target = 33
                                 count = 0
                                 expandedTarget = false
@@ -2238,6 +2395,7 @@ class MainActivity : ComponentActivity() {
                                 Text("100")
                             },
                             onClick = {
+
                                 target = 100
                                 count = 0
                                 expandedTarget = false
@@ -2249,6 +2407,7 @@ class MainActivity : ComponentActivity() {
                                 Text("بدون حد")
                             },
                             onClick = {
+
                                 target = 0
                                 expandedTarget = false
                             }
@@ -2258,6 +2417,7 @@ class MainActivity : ComponentActivity() {
             }
 
             item {
+
                 Spacer(
                     Modifier.height(28.dp)
                 )
@@ -2325,6 +2485,7 @@ class MainActivity : ComponentActivity() {
                                 color = muted,
                                 fontSize = 13.sp
                             )
+
                         } else {
 
                             Text(
@@ -2338,6 +2499,7 @@ class MainActivity : ComponentActivity() {
             }
 
             item {
+
                 Spacer(
                     Modifier.height(22.dp)
                 )
@@ -2373,6 +2535,7 @@ class MainActivity : ComponentActivity() {
             }
 
             item {
+
                 Spacer(
                     Modifier.height(12.dp)
                 )
