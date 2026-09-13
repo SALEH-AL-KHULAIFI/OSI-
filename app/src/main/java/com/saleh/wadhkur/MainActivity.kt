@@ -14,7 +14,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -77,7 +76,14 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        ReminderScheduler.schedule(this)
+        /*
+         * تشغيل جميع أنظمة التذكير:
+         *
+         * 1. الأذكار العامة حسب الفاصل المختار.
+         * 2. أذكار الصباح الساعة 06:00.
+         * 3. أذكار المساء الساعة 17:00.
+         */
+        ReminderScheduler.scheduleAll(this)
     }
 
     private fun requestNotifications() {
@@ -310,7 +316,7 @@ class MainActivity : ComponentActivity() {
                 MainCard(
                     "🔔",
                     "تذكير الذكر",
-                    "اختر كل كم دقيقة يظهر لك ذكر جديد",
+                    "اختر كل كم دقيقة يظهر لك ذكر عام جديد",
                     onReminders
                 )
             }
@@ -463,7 +469,7 @@ class MainActivity : ComponentActivity() {
                 contentColor = green
             ) {
 
-                titles.forEachIndexed { tabIndex, title ->
+                titles.forEachIndexed { tabIndex, _ ->
 
                     Tab(
                         selected = selectedTab == tabIndex,
@@ -680,10 +686,25 @@ class MainActivity : ComponentActivity() {
                 ) {
 
                     Text(
-                        "التذكير الدوري",
+                        "التذكير الدوري للأذكار العامة",
                         color = Color.White,
                         fontSize = 22.sp,
                         fontWeight = FontWeight.Bold
+                    )
+
+                    Spacer(
+                        Modifier.height(8.dp)
+                    )
+
+                    Text(
+                        "يتم تذكيرك بذكر عام حسب الفاصل الذي تختاره. أذكار الصباح والمساء لها مواعيد ثابتة.",
+                        color = Color(0xFF9AAFB8),
+                        fontSize = 13.sp,
+                        lineHeight = 21.sp
+                    )
+
+                    Spacer(
+                        Modifier.height(12.dp)
                     )
 
                     Row(
@@ -712,7 +733,11 @@ class MainActivity : ComponentActivity() {
                                     )
                                     .apply()
 
-                                ReminderScheduler.schedule(
+                                /*
+                                 * تشغيل أو إيقاف جميع أنواع
+                                 * التذكيرات.
+                                 */
+                                ReminderScheduler.scheduleAll(
                                     this@MainActivity
                                 )
                             }
@@ -720,7 +745,7 @@ class MainActivity : ComponentActivity() {
                     }
 
                     Text(
-                        "الفاصل الزمني",
+                        "الفاصل الزمني للأذكار العامة",
                         color = cyan,
                         fontSize = 16.sp
                     )
@@ -767,7 +792,11 @@ class MainActivity : ComponentActivity() {
                                                 )
                                                 .apply()
 
-                                            ReminderScheduler.schedule(
+                                            /*
+                                             * تغيير الفاصل يؤثر
+                                             * على الأذكار العامة فقط.
+                                             */
+                                            ReminderScheduler.scheduleGeneral(
                                                 this@MainActivity
                                             )
                                         },
@@ -801,7 +830,7 @@ class MainActivity : ComponentActivity() {
                         }
 
                     Text(
-                        "سيختار التطبيق ذكرًا عشوائيًا من قائمة الأذكار عند كل تذكير.",
+                        "أذكار الصباح: يوميًا الساعة 06:00 صباحًا.\nأذكار المساء: يوميًا الساعة 05:00 عصرًا.",
                         color = Color(0xFF9AAFB8),
                         fontSize = 13.sp,
                         lineHeight = 21.sp
