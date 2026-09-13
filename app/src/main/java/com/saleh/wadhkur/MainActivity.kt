@@ -53,6 +53,7 @@ class MainActivity : ComponentActivity() {
     ) { result ->
         if (result.values.any { it }) {
             saveBestLocation()
+
             Toast.makeText(
                 this,
                 "تم تحديث موقع مواقيت الصلاة",
@@ -132,53 +133,164 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /*
+     * الحصول على أفضل موقع متاح.
+     *
+     * إذا لم يكن هناك LastKnownLocation محفوظ،
+     * نطلب موقعًا حديثًا من GPS أو الشبكة.
+     */
     private fun saveBestLocation() {
 
-        val lm =
-            getSystemService(LocationManager::class.java)
+        val manager =
+            getSystemService(Context.LOCATION_SERVICE)
+                    as LocationManager
 
-        val providers = listOf(
-            LocationManager.GPS_PROVIDER,
-            LocationManager.NETWORK_PROVIDER
-        )
-
-        var best: Location? = null
-
-        for (provider in providers) {
-
-            try {
-
-                val location =
-                    lm.getLastKnownLocation(provider)
-                        ?: continue
-
-                if (
-                    best == null ||
-                    location.accuracy < best!!.accuracy
-                ) {
-                    best = location
-                }
-
-            } catch (_: SecurityException) {
-            }
+        if (
+            checkSelfPermission(
+                Manifest.permission.ACCESS_FINE_LOCATION
+            ) != PackageManager.PERMISSION_GRANTED &&
+            checkSelfPermission(
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            return
         }
 
-        best?.let {
-
+        val prefs =
             getSharedPreferences(
                 "wadhkur_location",
                 MODE_PRIVATE
             )
-                .edit()
+
+        fun saveLocation(location: Location) {
+
+            prefs.edit()
                 .putFloat(
                     "lat",
-                    it.latitude.toFloat()
+                    location.latitude.toFloat()
                 )
                 .putFloat(
                     "lon",
-                    it.longitude.toFloat()
+                    location.longitude.toFloat()
                 )
                 .apply()
+
+            /*
+             * إعادة إنشاء الواجهة حتى تقرأ مواقيت الصلاة
+             * الإحداثيات الجديدة مباشرة.
+             */
+            runOnUiThread {
+                recreate()
+            }
+        }
+
+        try {
+
+            /*
+             * أولاً نحاول الحصول على أفضل موقع محفوظ
+             * من جميع مزودي الموقع المتاحين.
+             */
+            val providers =
+                manager.getProviders(true)
+
+            var bestLocation: Location? = null
+
+            for (provider in providers) {
+
+                try {
+
+                    val location =
+                        manager.getLastKnownLocation(provider)
+
+                    if (
+                        location != null &&
+                        (
+                            bestLocation == null ||
+                            location.accuracy <
+                            bestLocation!!.accuracy
+                        )
+                    ) {
+                        bestLocation = location
+                    }
+
+                } catch (_: SecurityException) {
+                }
+            }
+
+            if (bestLocation != null) {
+                saveLocation(bestLocation!!)
+                return
+            }
+
+            /*
+             * لا يوجد موقع محفوظ.
+             * نحدد أفضل مزود متاح ونطلب موقعًا جديدًا.
+             */
+            val provider =
+                when {
+
+                    manager.isProviderEnabled(
+                        LocationManager.GPS_PROVIDER
+                    ) ->
+                        LocationManager.GPS_PROVIDER
+
+                    manager.isProviderEnabled(
+                        LocationManager.NETWORK_PROVIDER
+                    ) ->
+                        LocationManager.NETWORK_PROVIDER
+
+                    else -> null
+                }
+
+            if (provider == null) {
+
+                Toast.makeText(
+                    this,
+                    "فعّل خدمة الموقع في الهاتف",
+                    Toast.LENGTH_SHORT
+                ).show()
+
+                return
+            }
+
+            /*
+             * طلب موقع حديث.
+             */
+            manager.requestLocationUpdates(
+                provider,
+                0L,
+                0f,
+                object : android.location.LocationListener {
+
+                    override fun onLocationChanged(
+                        location: Location
+                    ) {
+                        saveLocation(location)
+
+                        try {
+                            manager.removeUpdates(this)
+                        } catch (_: Exception) {
+                        }
+                    }
+                },
+                android.os.Looper.getMainLooper()
+            )
+
+        } catch (_: SecurityException) {
+
+            Toast.makeText(
+                this,
+                "لا يوجد إذن للوصول إلى الموقع",
+                Toast.LENGTH_SHORT
+            ).show()
+
+        } catch (_: Exception) {
+
+            Toast.makeText(
+                this,
+                "تعذر الحصول على الموقع",
+                Toast.LENGTH_SHORT
+            ).show()
         }
     }
 
@@ -472,12 +584,6 @@ class MainActivity : ComponentActivity() {
 
     private fun getRamadanRemaining(): RamadanRemaining {
 
-        /*
-         * بداية رمضان 1448هـ المتوقعة:
-         * 08 فبراير 2027.
-         *
-         * التاريخ قد يختلف يومًا حسب ثبوت الهلال.
-         */
         val target = Calendar.getInstance().apply {
 
             set(
@@ -783,10 +889,6 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        /*
-         * انتهت صلاة العشاء.
-         * ننتقل مباشرة إلى فجر اليوم التالي.
-         */
         val tomorrow =
             Calendar.getInstance().apply {
                 add(
