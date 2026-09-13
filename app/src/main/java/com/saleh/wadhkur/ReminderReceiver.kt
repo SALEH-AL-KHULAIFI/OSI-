@@ -10,18 +10,29 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import kotlin.random.Random
 
-class ReminderReceiver : BroadcastReceiver() {
+class ReminderReceiver : BroadcastReceiver {
+
+    companion object {
+        private const val CHANNEL_ID = "dhikr_reminders_v2"
+        private const val NOTIFICATION_ID = 8800
+        private const val PENDING_INTENT_REQUEST_CODE = 7400
+    }
 
     override fun onReceive(
         context: Context,
         intent: Intent?
     ) {
 
-        val prefs = context.getSharedPreferences(
-            ReminderScheduler.PREFS,
-            Context.MODE_PRIVATE
-        )
+        val prefs =
+            context.getSharedPreferences(
+                ReminderScheduler.PREFS,
+                Context.MODE_PRIVATE
+            )
 
+        /*
+         * إذا كان المستخدم أوقف التذكير،
+         * لا نعرض شيئًا ولا نعيد الجدولة.
+         */
         if (
             !prefs.getBoolean(
                 ReminderScheduler.ENABLED,
@@ -31,20 +42,27 @@ class ReminderReceiver : BroadcastReceiver() {
             return
         }
 
-        // اختيار ذكر عشوائي من جميع الأقسام
+        /*
+         * جمع جميع أنواع الأذكار.
+         */
         val allDhikr =
             DhikrRepository.main +
             DhikrRepository.morning +
             DhikrRepository.evening
 
+        if (allDhikr.isEmpty()) {
+            ReminderScheduler.schedule(context)
+            return
+        }
+
+        /*
+         * اختيار ذكر عشوائي.
+         */
         val dhikr =
             allDhikr.random(Random.Default)
 
         /*
          * الواجهة المخصصة للتذكير.
-         *
-         * Android الحديث لا يسمح عادةً بتشغيل Activity
-         * مباشرة من الخلفية، لذلك نستخدم Full Screen Intent.
          */
         val fullScreenIntent =
             Intent(
@@ -71,7 +89,7 @@ class ReminderReceiver : BroadcastReceiver() {
         val fullScreenPendingIntent =
             PendingIntent.getActivity(
                 context,
-                7400,
+                PENDING_INTENT_REQUEST_CODE,
                 fullScreenIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or
                     PendingIntent.FLAG_IMMUTABLE
@@ -82,25 +100,22 @@ class ReminderReceiver : BroadcastReceiver() {
                 NotificationManager::class.java
             )
 
-        val channelId =
-            "dhikr_reminders"
+        /*
+         * قناة جديدة لضمان أن مستوى الأهمية
+         * High حتى لو كانت القناة القديمة
+         * قد تم حفظ إعداداتها من النظام.
+         */
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
 
-        if (Build.VERSION.SDK_INT >= 26) {
-
-            manager.createNotificationChannel(
-
+            val channel =
                 NotificationChannel(
-                    channelId,
-                    context.getString(
-                        R.string.channel_name
-                    ),
+                    CHANNEL_ID,
+                    "تذكيرات وذكر",
                     NotificationManager.IMPORTANCE_HIGH
                 ).apply {
 
                     description =
-                        context.getString(
-                            R.string.channel_description
-                        )
+                        "تنبيهات تذكير الأذكار من تطبيق وذكر"
 
                     enableVibration(true)
 
@@ -108,68 +123,71 @@ class ReminderReceiver : BroadcastReceiver() {
                         null,
                         null
                     )
+
+                    lockscreenVisibility =
+                        android.app.Notification.VISIBILITY_PUBLIC
                 }
-            )
+
+            manager.createNotificationChannel(channel)
         }
 
         /*
-         * إشعار احتياطي.
+         * بناء الإشعار كوسيلة احتياطية.
          *
-         * إذا سمح Android بالـ Full Screen Intent
-         * ستظهر ReminderActivity مباشرة.
+         * عند السماح بخاصية Full Screen Intent
+         * سيظهر ReminderActivity مباشرة.
          *
-         * وإذا منعها النظام، يبقى هذا الإشعار
-         * ويمكن للمستخدم الضغط عليه لفتح شاشة الذكر.
+         * وإذا لم يسمح النظام بذلك، يبقى الإشعار
+         * ظاهرًا ويمكن للمستخدم الضغط عليه لفتح
+         * شاشة التذكير المخصصة.
          */
         val notification =
             NotificationCompat.Builder(
                 context,
-                channelId
+                CHANNEL_ID
             )
-
                 .setSmallIcon(
                     android.R.drawable.ic_popup_reminder
                 )
-
                 .setContentTitle(
                     "وٌ ذکْــر"
                 )
-
                 .setContentText(
                     dhikr.text
                 )
-
                 .setStyle(
                     NotificationCompat
                         .BigTextStyle()
                         .bigText(dhikr.text)
                 )
-
                 .setPriority(
                     NotificationCompat.PRIORITY_MAX
                 )
-
                 .setCategory(
-                    NotificationCompat.CATEGORY_ALARM
+                    NotificationCompat.CATEGORY_REMINDER
                 )
-
+                .setVisibility(
+                    NotificationCompat.VISIBILITY_PUBLIC
+                )
                 .setAutoCancel(true)
-
-                .setOngoing(false)
-
+                .setContentIntent(
+                    fullScreenPendingIntent
+                )
                 .setFullScreenIntent(
                     fullScreenPendingIntent,
                     true
                 )
-
                 .build()
 
         manager.notify(
-            8800,
+            NOTIFICATION_ID,
             notification
         )
 
-        // إعادة جدولة التذكير القادم
+        /*
+         * جدولة التذكير التالي بنفس الفاصل
+         * الذي اختاره المستخدم.
+         */
         ReminderScheduler.schedule(context)
     }
 }
