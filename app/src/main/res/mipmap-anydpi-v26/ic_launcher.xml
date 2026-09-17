@@ -1,64 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="108dp"
-    android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108">
-
-    <!-- الخلفية -->
-    <path
-        android:fillColor="#071016"
-        android:pathData="M0,0h108v108h-108z" />
-
-    <!-- الإطار النيون -->
-    <path
-        android:fillColor="#163A36"
-        android:pathData="M54,9A45,45 0,1 0,54 99A45,45 0,1 0,54 9" />
-
-    <path
-        android:fillColor="#39FF8F"
-        android:pathData="M54,13A41,41 0,1 0,54 95A41,41 0,1 0,54 13" />
-
-    <path
-        android:fillColor="#071016"
-        android:pathData="M54,21A33,33 0,1 0,54 87A33,33 0,1 0,54 21" />
-
-    <!-- الهلال -->
-    <path
-        android:fillColor="#39FF8F"
-        android:pathData="M68,27A28,28 0,1 0,76,75A23,23 0,1 1,68 27z" />
-
-    <!-- النجمة -->
-    <path
-        android:fillColor="#D8FFE9"
-        android:pathData="M79,25l2,5 5,2 -5,2 -2,5 -2,-5 -5,-2 5,-2z" />
-
-    <!-- الكتاب المفتوح -->
-    <path
-        android:fillColor="#39FF8F"
-        android:pathData="M23,55c8,-6 17,-8 29,-3v27c-11,-5 -20,-4 -29,2z" />
-
-    <path
-        android:fillColor="#39FF8F"
-        android:pathData="M85,55c-8,-6 -17,-8 -29,-3v27c11,-5 20,-4 29,2z" />
-
-    <!-- صفحات الكتاب -->
-    <path
-        android:fillColor="#071016"
-        android:pathData="M29,58c7,-4 14,-4 23,0v16c-9,-3 -16,-3 -23,1z" />
-
-    <path
-        android:fillColor="#071016"
-        android:pathData="M79,58c-7,-4 -14,-4 -23,0v16c9,-3 16,-3 23,1z" />
-
-    <!-- المنتصف -->
-    <path
-        android:fillColor="#D8FFE9"
-        android:pathData="M54,54v22h2v-22z" />
-
-    <!-- الضوء -->
-    <path
-        android:fillColor="#D8FFE9"
-        android:pathData="M54,48A4,4 0,1 0,54 56A4,4 0,1 0,54 48" />
-
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#06120F" android:pathData="M0,0h108v108h-108z" />
+    <path android:fillColor="#12352D" android:pathData="M54,7A47,47 0,1 0,54 101A47,47 0,1 0,54 7" />
+    <path android:fillColor="#D9FFE8" android:pathData="M54,14A40,40 0,1 0,54 94A40,40 0,1 0,54 14" />
+    <path android:fillColor="#06120F" android:pathData="M54,18A36,36 0,1 0,54 90A36,36 0,1 0,54 18" />
+    <!-- minaret -->
+    <path android:fillColor="#39FF9A" android:pathData="M50,38h8l2,38h-12z" />
+    <path android:fillColor="#D9FFE8" android:pathData="M47,34h14v5h-14z" />
+    <path android:fillColor="#39FF9A" android:pathData="M45,31h18v4h-18z" />
+    <path android:fillColor="#39FF9A" android:pathData="M52,25h4v7h-4z" />
+    <path android:fillColor="#D9FFE8" android:pathData="M54,20l5,6h-10z" />
+    <!-- mosque dome and base -->
+    <path android:fillColor="#39FF9A" android:pathData="M25,76c2,-12 12,-20 23,-20 11,0 21,8 23,20z" />
+    <path android:fillColor="#39FF9A" android:pathData="M20,76h60v7h-60z" />
+    <path android:fillColor="#06120F" android:pathData="M49,65h10v18h-10z" />
+    <path android:fillColor="#D9FFE8" android:pathData="M52,65h4v18h-4z" />
+    <!-- crescent -->
+    <path android:fillColor="#D9FFE8" android:pathData="M76,24A10,10 0,1 0,82,42A8,8 0,1 1,76,24z" />
+    <path android:fillColor="#39FF9A" android:pathData="M86,22l1.5,3.5 3.5,1.5 -3.5,1.5 -1.5,3.5 -1.5,-3.5 -3.5,-1.5 3.5,-1.5z" />
 </vector>
