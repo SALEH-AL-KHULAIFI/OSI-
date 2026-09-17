@@ -24,6 +24,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -74,8 +75,8 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -371,136 +372,91 @@ private fun RamadanCard() {
     LaunchedEffect(Unit) { while (true) { remaining.value = ramadanCountdown(); delay(60_000) } }
     SectionCard("كم باقي على رمضان؟", Icons.Default.Brightness4) {
         Text(remaining.value, fontSize = 27.sp, fontWeight = FontWeight.Bold, color = WadhkurColors.primary)
-        Text("العدّاد يعتمد على التقويم الهجري المدني وقد يختلف بدء رمضان رسميًا حسب الرؤية المحلية.", color = WadhkurColors.muted, fontSize = 12.sp)
-    }
-}
-
-@Composable
-private fun PrayerPreview(prayers: PrayerTimes?, hasLocation: Boolean, open: () -> Unit) {
-    SectionCard("مواقيت الصلاة", Icons.Default.AccessTime) {
-        if (!hasLocation || prayers == null) {
-            Text("فعّل الموقع لحساب المواقيت حسب موقعك.", color = WadhkurColors.muted)
-        } else {
-            val values = listOf("الفجر" to prayers.fajr, "الشروق" to prayers.sunrise, "الظهر" to prayers.dhuhr, "العصر" to prayers.asr, "المغرب" to prayers.maghrib, "العشاء" to prayers.isha)
-            values.forEach { (name, time) -> Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) { Text(name); Text(time, fontWeight = FontWeight.Bold) } }
-        }
-        TextButton(onClick = open) { Text("عرض تفاصيل الصلاة") }
-    }
-}
-
-@Composable
-private fun QuickTile(title: String, subtitle: String, emoji: String, onClick: () -> Unit) {
-    Card(
-        Modifier.fillMaxWidth().clickable(onClick = onClick),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = WadhkurColors.surface),
-        border = BorderStroke(1.dp, WadhkurColors.edge)
-    ) {
-        Row(Modifier.padding(17.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(48.dp).clip(CircleShape).background(WadhkurColors.surface2), contentAlignment = Alignment.Center) { Text(emoji, fontSize = 24.sp) }
-            Spacer(Modifier.width(14.dp))
-            Column { Text(title, fontSize = 18.sp, fontWeight = FontWeight.Bold); Text(subtitle, color = WadhkurColors.muted, fontSize = 13.sp) }
-        }
+        Text("العدّاد يعتمد على التقويم الهجري المدني وقد يختلف بدء رمضان حسب الرؤية المحلية.", color = WadhkurColors.muted)
     }
 }
 
 @Composable
 private fun SectionCard(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector, content: @Composable ColumnScope.() -> Unit) {
     Card(
-        Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = WadhkurColors.surface),
-        border = BorderStroke(1.dp, WadhkurColors.edge)
+        border = BorderStroke(1.dp, WadhkurColors.edge),
+        colors = CardDefaults.cardColors(containerColor = WadhkurColors.surface)
     ) {
-        Column(Modifier.padding(17.dp), content = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(icon, null, tint = WadhkurColors.primary)
-                Spacer(Modifier.width(8.dp))
-                Text(title, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp), content = content)
+    }
+}
+
+@Composable
+private fun QuickTile(title: String, subtitle: String, emoji: String, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(1.dp, WadhkurColors.edge),
+        colors = CardDefaults.cardColors(containerColor = WadhkurColors.surface)
+    ) {
+        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(emoji, fontSize = 30.sp)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(title, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = WadhkurColors.text)
+                Text(subtitle, color = WadhkurColors.muted)
             }
-            Spacer(Modifier.height(10.dp))
-            content()
-        })
+            Icon(Icons.Default.ArrowBack, null, tint = WadhkurColors.primary)
+        }
+    }
+}
+
+@Composable
+private fun PrayerPreview(prayers: List<PrayerCalculator.PrayerTime>?, hasLocation: Boolean, onClick: () -> Unit) {
+    SectionCard("مواقيت الصلاة", Icons.Default.AccessTime) {
+        if (!hasLocation || prayers == null) {
+            Text("فعّل الموقع لعرض مواقيت الصلاة حسب مكانك.", color = WadhkurColors.muted)
+        } else {
+            prayers.take(5).forEach { prayer ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(prayer.name, color = WadhkurColors.text)
+                    Text(prayer.time, fontWeight = FontWeight.Bold, color = WadhkurColors.primary)
+                }
+            }
+        }
+        TextButton(onClick = onClick) { Text("عرض جميع المواقيت") }
     }
 }
 
 @Composable
 private fun AdBanner() {
-    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = WadhkurColors.surface), border = BorderStroke(1.dp, WadhkurColors.edge)) {
-        Column(Modifier.fillMaxWidth().padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("إعلان", color = WadhkurColors.muted, fontSize = 10.sp)
-            AndroidView(
-                modifier = Modifier.fillMaxWidth().height(60.dp),
-                factory = { context -> AdView(context).apply { setAdSize(AdSize.BANNER); adUnitId = "ca-app-pub-3940256099942544/6300978111"; loadAd(AdRequest.Builder().build()) } }
-            )
+    val context = LocalContext.current
+    AndroidView(
+        modifier = Modifier.fillMaxWidth().height(60.dp),
+        factory = {
+            AdView(it).apply {
+                setAdSize(AdSize.BANNER)
+                adUnitId = "ca-app-pub-3940256099942544/6300978111"
+                loadAd(AdRequest.Builder().build())
+            }
         }
-    }
+    )
 }
 
 @Composable
 private fun PrayerScreen(padding: PaddingValues, locationVersion: Int, back: () -> Unit) {
     val context = LocalContext.current
     val prefs = context.getSharedPreferences("wadhkur_location", Context.MODE_PRIVATE)
-    val lat = prefs.getFloat("lat", Float.NaN).toDouble(); val lon = prefs.getFloat("lon", Float.NaN).toDouble()
+    val lat = prefs.getFloat("lat", Float.NaN).toDouble()
+    val lon = prefs.getFloat("lon", Float.NaN).toDouble()
     val prayers = if (lat.isFinite() && lon.isFinite()) PrayerCalculator.calculate(lat, lon) else null
     AppFrame(Modifier.padding(padding)) {
-        ScreenHeader("مواقيت الصلاة", back)
-        LazyColumn(contentPadding = PaddingValues(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            if (prayers == null) item { Text("لم يتم تحديد الموقع بعد.", color = WadhkurColors.muted) }
-            prayers?.let {
-                listOf("الفجر" to it.fajr, "الشروق" to it.sunrise, "الظهر" to it.dhuhr, "العصر" to it.asr, "المغرب" to it.maghrib, "العشاء" to it.isha).forEach { (name, time) -> item { Row(Modifier.fillMaxWidth().background(WadhkurColors.surface, RoundedCornerShape(16.dp)).border(1.dp, WadhkurColors.edge, RoundedCornerShape(16.dp)).padding(18.dp), horizontalArrangement = Arrangement.SpaceBetween) { Text(name, fontSize = 18.sp); Text(time, fontWeight = FontWeight.Bold, color = WadhkurColors.primary) } } }
-            }
-            item { Text("طريقة الحساب المحلية مبنية على الموقع ومعادلات شمسية داخل الجهاز، دون الحاجة إلى خادم.", color = WadhkurColors.muted, fontSize = 12.sp) }
-        }
-    }
-}
-
-@Composable
-private fun QiblaScreen(padding: PaddingValues, locationVersion: Int, azimuth: Float, back: () -> Unit) {
-    val context = LocalContext.current
-    val prefs = context.getSharedPreferences("wadhkur_location", Context.MODE_PRIVATE)
-    val lat = prefs.getFloat("lat", Float.NaN).toDouble(); val lon = prefs.getFloat("lon", Float.NaN).toDouble()
-    val bearing = if (lat.isFinite() && lon.isFinite()) qiblaBearing(lat, lon) else null
-    val rotation = if (bearing != null) bearing - azimuth else 0.0
-    AppFrame(Modifier.padding(padding)) {
-        ScreenHeader("اتجاه القبلة", back)
-        Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(18.dp)) {
-            Spacer(Modifier.height(10.dp))
-            Box(Modifier.size(230.dp).clip(CircleShape).background(WadhkurColors.surface).border(2.dp, WadhkurColors.primary, CircleShape), contentAlignment = Alignment.Center) {
-                Text("🕋", fontSize = 68.sp, modifier = Modifier.graphicsLayer(rotationZ = rotation.toFloat()))
-            }
-            if (bearing != null) {
-                Text("اتجاه القبلة: ${bearing.toInt()}°", fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                Text("حرّك الهاتف حتى يتجه الرمز نحو القبلة", color = WadhkurColors.muted, textAlign = TextAlign.Center)
+        Column(Modifier.fillMaxSize().padding(top = 18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            TextButton(onClick = back) { Text("رجوع") }
+            Text("مواقيت الصلاة", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = WadhkurColors.primary)
+            if (prayers == null) {
+                Text("حدّد موقعك من الصفحة الرئيسية لعرض المواقيت.", color = WadhkurColors.muted)
             } else {
-                Text("حدد موقعك أولًا لاحتساب اتجاه القبلة", color = WadhkurColors.muted)
-            }
-            Text("تعتمد البوصلة على مستشعرات الجهاز؛ قد تحتاج إلى معايرة الهاتف.", fontSize = 12.sp, color = WadhkurColors.muted, textAlign = TextAlign.Center)
-        }
-    }
-}
-
-@Composable
-private fun DhikrScreen(padding: PaddingValues, back: () -> Unit) {
-    var category by rememberSaveable { mutableStateOf("morning") }
-    val list = if (category == "morning") DhikrRepository.morning else DhikrRepository.evening
-    var index by rememberSaveable { mutableIntStateOf(0) }
-    val current = list.getOrNull(index.coerceIn(0, list.lastIndex))
-    AppFrame(Modifier.padding(padding)) {
-        ScreenHeader("الأذكار", back)
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { category = "morning"; index = 0 }, modifier = Modifier.weight(1f)) { Text("أذكار الصباح") }
-            Button(onClick = { category = "evening"; index = 0 }, modifier = Modifier.weight(1f)) { Text("أذكار المساء") }
-        }
-        Spacer(Modifier.height(14.dp))
-        if (current != null) {
-            Card(Modifier.fillMaxWidth().weight(1f), colors = CardDefaults.cardColors(containerColor = WadhkurColors.surface), border = BorderStroke(1.dp, WadhkurColors.edge)) {
-                Column(Modifier.fillMaxSize().padding(22.dp), verticalArrangement = Arrangement.SpaceBetween, horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("${index + 1} / ${list.size}", color = WadhkurColors.primary)
-                    Text(current.text, fontSize = 25.sp, lineHeight = 40.sp, textAlign = TextAlign.Center, fontWeight = FontWeight.Medium)
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        TextButton(enabled = index > 0, onClick = { index-- }) { Text("السابق") }
-                        TextButton(enabled = index < list.lastIndex, onClick = { index++ }) { Text("التالي") }
+                prayers.forEach { prayer ->
+                    SectionCard(prayer.name, Icons.Default.AccessTime) {
+                        Text(prayer.time, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = WadhkurColors.text)
                     }
                 }
             }
@@ -509,53 +465,24 @@ private fun DhikrScreen(padding: PaddingValues, back: () -> Unit) {
 }
 
 @Composable
-private fun TasbeehScreen(padding: PaddingValues, back: () -> Unit) {
+private fun QiblaScreen(padding: PaddingValues, locationVersion: Int, azimuth: Float, back: () -> Unit) {
     val context = LocalContext.current
-    val prefs = context.getSharedPreferences("wadhkur_tasbeeh", Context.MODE_PRIVATE)
-    var count by rememberSaveable { mutableIntStateOf(prefs.getInt("count", 0)) }
-    var goal by rememberSaveable { mutableIntStateOf(prefs.getInt("goal", 33)) }
-    fun save(value: Int) { count = value; prefs.edit().putInt("count", value).putInt("goal", goal).apply() }
+    val prefs = context.getSharedPreferences("wadhkur_location", Context.MODE_PRIVATE)
+    val lat = prefs.getFloat("lat", Float.NaN).toDouble()
+    val lon = prefs.getFloat("lon", Float.NaN).toDouble()
+    val qibla = if (lat.isFinite() && lon.isFinite()) qiblaBearing(lat, lon) else null
+    val rotation = if (qibla != null) qibla - azimuth else 0f
     AppFrame(Modifier.padding(padding)) {
-        ScreenHeader("التسبيح السريع", back)
-        Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(18.dp)) {
-            Text("$count", fontSize = 70.sp, fontWeight = FontWeight.Bold, color = WadhkurColors.primary)
-            Text("الهدف: $goal", color = WadhkurColors.muted)
-            Box(Modifier.size(190.dp).clip(CircleShape).background(WadhkurColors.surface).border(3.dp, WadhkurColors.primary, CircleShape).clickable { save(count + 1) }, contentAlignment = Alignment.Center) { Text("سَبِّح", fontSize = 30.sp, fontWeight = FontWeight.Bold) }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(33, 100, 1000).forEach { value -> TextButton(onClick = { goal = value; prefs.edit().putInt("goal", value).apply() }) { Text("$value") } }
+        Column(Modifier.fillMaxSize().padding(top = 18.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            TextButton(onClick = back) { Text("رجوع") }
+            Text("اتجاه القبلة", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = WadhkurColors.primary)
+            if (qibla == null) {
+                Text("حدّد موقعك أولًا لحساب اتجاه القبلة.", color = WadhkurColors.muted)
+            } else {
+                Text("${qibla.toInt()}°", fontSize = 30.sp, fontWeight = FontWeight.Bold, color = WadhkurColors.text)
+                Text("وجّه السهم نحو القبلة", color = WadhkurColors.muted)
+                Text("➤", fontSize = 100.sp, color = WadhkurColors.primary, modifier = Modifier.graphicsLayer(rotationZ = rotation))
             }
-            TextButton(onClick = { save(0) }) { Icon(Icons.Default.Refresh, null); Spacer(Modifier.width(5.dp)); Text("تصفير العداد") }
-        }
-    }
-}
-
-@Composable
-private fun CalendarScreen(padding: PaddingValues, back: () -> Unit) {
-    val cal = Calendar.getInstance()
-    AppFrame(Modifier.padding(padding)) {
-        ScreenHeader("التقويم الهجري", back)
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            item { SectionCard("اليوم", Icons.Default.CalendarMonth) { Text(islamicDate(cal), fontSize = 26.sp, fontWeight = FontWeight.Bold); Text(gregorianDate(), color = WadhkurColors.muted) } }
-            item { Text("يمكن توسيع التقويم لاحقًا لإضافة المناسبات الهجرية، بداية الأشهر، والتنبيهات الشخصية.", color = WadhkurColors.muted) }
-        }
-    }
-}
-
-@Composable
-private fun ReminderSettingsScreen(padding: PaddingValues, back: () -> Unit) {
-    val context = LocalContext.current
-    val prefs = context.getSharedPreferences(ReminderScheduler.PREFS, Context.MODE_PRIVATE)
-    var general by remember { mutableStateOf(prefs.getBoolean(ReminderScheduler.ENABLED, true)) }
-    var morning by remember { mutableStateOf(prefs.getBoolean(ReminderScheduler.MORNING_ENABLED, true)) }
-    var evening by remember { mutableStateOf(prefs.getBoolean(ReminderScheduler.EVENING_ENABLED, true)) }
-    fun update(key: String, value: Boolean) { prefs.edit().putBoolean(key, value).apply(); ReminderScheduler.scheduleAll(context) }
-    AppFrame(Modifier.padding(padding)) {
-        ScreenHeader("التذكيرات", back)
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            item { SettingRow("تذكير عام", "حسب الفاصل المحفوظ", general) { general = it; update(ReminderScheduler.ENABLED, it) } }
-            item { SettingRow("أذكار الصباح", "يوميًا الساعة 06:00", morning) { morning = it; update(ReminderScheduler.MORNING_ENABLED, it) } }
-            item { SettingRow("أذكار المساء", "يوميًا الساعة 17:00", evening) { evening = it; update(ReminderScheduler.EVENING_ENABLED, it) } }
-            item { Text("قد تختلف دقة المنبهات على بعض الأجهزة بسبب إعدادات توفير البطارية. لا يمنح التطبيق نفسه صلاحية تجاوز قيود النظام.", color = WadhkurColors.muted, fontSize = 12.sp) }
         }
     }
 }
@@ -563,184 +490,173 @@ private fun ReminderSettingsScreen(padding: PaddingValues, back: () -> Unit) {
 @Composable
 private fun MoreScreen(padding: PaddingValues, go: (String) -> Unit, openEmail: () -> Unit) {
     AppFrame(Modifier.padding(padding)) {
-        Text("المزيد", Modifier.padding(top = 20.dp), fontSize = 28.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(12.dp))
-        MoreRow("القبلة", "اتجاه القبلة بالبوصلة", Icons.Default.Explore) { go("qibla") }
-        MoreRow("التقويم الهجري", "التاريخ الهجري اليوم", Icons.Default.CalendarMonth) { go("calendar") }
-        MoreRow("التذكيرات", "أذكار الصباح والمساء والتذكير العام", Icons.Default.Notifications) { go("reminders") }
-        MoreRow("الخصوصية", "سياسة الخصوصية وبيانات التطبيق", Icons.Default.PrivacyTip) { go("privacy") }
-        MoreRow("عن وذكر", "المطور والتواصل", Icons.Default.Info) { go("about") }
-        Spacer(Modifier.height(18.dp))
-        TextButton(onClick = openEmail, modifier = Modifier.fillMaxWidth()) { Text(MainActivity.EMAIL) }
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(top = 18.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            item { Text("المزيد", fontSize = 30.sp, fontWeight = FontWeight.Bold, color = WadhkurColors.primary) }
+            item { QuickTile("التقويم الهجري", "عرض التاريخ الهجري", "🗓️") { go("calendar") } }
+            item { QuickTile("التذكيرات", "إدارة تنبيهات الأذكار والصلاة", "🔔") { go("reminders") } }
+            item { QuickTile("الخصوصية", "كيف يتعامل التطبيق مع بياناتك", "🔒") { go("privacy") } }
+            item { QuickTile("تواصل مع المطور", "saleh.mabkhot@hotmail.com", "✉️") { openEmail() } }
+            item {
+                SectionCard("حول وذكر", Icons.Default.Info) {
+                    Text("المطور صالح الخليفي", fontWeight = FontWeight.Bold, color = WadhkurColors.text)
+                    Text("البريد: ${MainActivity.EMAIL}", color = WadhkurColors.muted)
+                    Text("تطبيق وذكر — أدوات يومية للذكر والصلاة والقبلة والتقويم الهجري.", color = WadhkurColors.muted)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DhikrScreen(padding: PaddingValues, back: () -> Unit) {
+    val items = listOf("سبحان الله", "الحمد لله", "الله أكبر", "لا إله إلا الله", "أستغفر الله")
+    AppFrame(Modifier.padding(padding)) {
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(top = 18.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            item { TextButton(onClick = back) { Text("رجوع") } }
+            item { Text("الأذكار", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = WadhkurColors.primary) }
+            itemsIndexed(items) { index, text ->
+                SectionCard("ذكر ${index + 1}", Icons.Default.Favorite) {
+                    Text(text, fontSize = 25.sp, fontWeight = FontWeight.Bold, color = WadhkurColors.text, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TasbeehScreen(padding: PaddingValues, back: () -> Unit) {
+    var count by rememberSaveable { mutableIntStateOf(0) }
+    AppFrame(Modifier.padding(padding)) {
+        Column(Modifier.fillMaxSize().padding(top = 18.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            TextButton(onClick = back) { Text("رجوع") }
+            Text("تسبيح سريع", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = WadhkurColors.primary)
+            Text(count.toString(), fontSize = 72.sp, fontWeight = FontWeight.Bold, color = WadhkurColors.text)
+            Button(onClick = { count++ }, modifier = Modifier.size(180.dp)) { Text("تسبيح", fontSize = 24.sp) }
+            TextButton(onClick = { count = 0 }) { Text("تصفير العداد") }
+        }
+    }
+}
+
+@Composable
+private fun CalendarScreen(padding: PaddingValues, back: () -> Unit) {
+    AppFrame(Modifier.padding(padding)) {
+        Column(Modifier.fillMaxSize().padding(top = 18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            TextButton(onClick = back) { Text("رجوع") }
+            Text("التقويم الهجري", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = WadhkurColors.primary)
+            Text(islamicDate(Calendar.getInstance()), fontSize = 24.sp, color = WadhkurColors.text)
+            Text("التاريخ الميلادي: ${gregorianDate()}", color = WadhkurColors.muted)
+        }
+    }
+}
+
+@Composable
+private fun ReminderSettingsScreen(padding: PaddingValues, back: () -> Unit) {
+    AppFrame(Modifier.padding(padding)) {
+        Column(Modifier.fillMaxSize().padding(top = 18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            TextButton(onClick = back) { Text("رجوع") }
+            Text("التذكيرات", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = WadhkurColors.primary)
+            Text("إدارة التذكيرات تتم محليًا من خلال نظام التنبيهات في التطبيق.", color = WadhkurColors.muted)
+        }
     }
 }
 
 @Composable
 private fun PrivacyScreen(padding: PaddingValues, back: () -> Unit) {
     AppFrame(Modifier.padding(padding)) {
-        ScreenHeader("الخصوصية", back)
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
-            item { Text("سياسة الخصوصية — وذكر", fontSize = 24.sp, fontWeight = FontWeight.Bold) }
-            item { Text("التطبيق مصمم ليعمل محليًا قدر الإمكان. موقع الجهاز، عند السماح به، يستخدم لحساب مواقيت الصلاة واتجاه القبلة داخل التطبيق. لا يطلب التطبيق إنشاء حساب.", color = WadhkurColors.text, lineHeight = 27.sp) }
-            item { Text("الإعلانات: يتكامل التطبيق مع Google Mobile Ads لعرض الإعلانات. قد يعالج مزود الإعلانات معرّفات الجهاز وبيانات مرتبطة بالإعلانات وفق إعدادات الموافقة وسياساته. يجب إكمال إعدادات الخصوصية وData Safety في Play Console قبل النشر.", color = WadhkurColors.text, lineHeight = 27.sp) }
-            item { Text("التخزين المحلي: تحفظ إعدادات التذكيرات والعداد وبعض الإحداثيات محليًا على الجهاز.", color = WadhkurColors.text, lineHeight = 27.sp) }
-            item { Text("التواصل وحذف البيانات: لا يوجد حساب مستخدم داخل التطبيق. للاستفسارات المتعلقة بالخصوصية: ${MainActivity.EMAIL}", color = WadhkurColors.text, lineHeight = 27.sp) }
-            item { Text("هذه الشاشة لا تغني عن نشر سياسة خصوصية عامة على عنوان URL وإدخاله في Play Console قبل الإصدار التجاري.", color = WadhkurColors.primary, fontWeight = FontWeight.Bold) }
+        Column(Modifier.fillMaxSize().padding(top = 18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            TextButton(onClick = back) { Text("رجوع") }
+            Text("الخصوصية", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = WadhkurColors.primary)
+            Text("الموقع يُستخدم محليًا لحساب مواقيت الصلاة والقبلة. التطبيق لا يتطلب حسابًا. الإعلانات وإدارة الموافقة تُدار عبر مكتبات Google المعتمدة.", color = WadhkurColors.text)
         }
     }
-}
-
-@Composable
-private fun AboutScreen(padding: PaddingValues, back: () -> Unit) {
-    AppFrame(Modifier.padding(padding)) {
-        ScreenHeader("عن وذكر", back)
-        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-            Text("وَذَكِّرْ", fontSize = 42.sp, fontWeight = FontWeight.Bold, color = WadhkurColors.primary)
-            Spacer(Modifier.height(8.dp))
-            Text("المطور صالح الخليفي", fontSize = 19.sp, fontWeight = FontWeight.Bold)
-            Text(MainActivity.EMAIL, color = WadhkurColors.primary)
-            Spacer(Modifier.height(18.dp))
-            Text("تطبيق إسلامي خفيف، سريع، يعمل دون حساب، ويجمع الأذكار ومواقيت الصلاة والقبلة والتقويم والتسبيح والتذكيرات في تجربة واحدة.", textAlign = TextAlign.Center, color = WadhkurColors.muted, lineHeight = 26.sp)
-            Spacer(Modifier.height(20.dp))
-            Text("الإصدار 4.0.0", color = WadhkurColors.muted)
-        }
-    }
-}
-
-@Composable
-private fun ScreenHeader(title: String, back: () -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = back) { Icon(Icons.Default.ArrowBack, null) }
-        Text(title, fontSize = 25.sp, fontWeight = FontWeight.Bold)
-    }
-}
-
-@Composable
-private fun SettingRow(title: String, subtitle: String, checked: Boolean, onChecked: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth().background(WadhkurColors.surface, RoundedCornerShape(16.dp)).border(1.dp, WadhkurColors.edge, RoundedCornerShape(16.dp)).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) { Text(title, fontSize = 17.sp, fontWeight = FontWeight.Bold); Text(subtitle, color = WadhkurColors.muted, fontSize = 12.sp) }
-        Switch(checked = checked, onCheckedChange = onChecked)
-    }
-}
-
-@Composable
-private fun MoreRow(title: String, subtitle: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
-    Card(Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable(onClick = onClick), colors = CardDefaults.cardColors(containerColor = WadhkurColors.surface), border = BorderStroke(1.dp, WadhkurColors.edge)) {
-        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, null, tint = WadhkurColors.primary, modifier = Modifier.size(28.dp))
-            Spacer(Modifier.width(13.dp))
-            Column { Text(title, fontWeight = FontWeight.Bold, fontSize = 17.sp); Text(subtitle, color = WadhkurColors.muted, fontSize = 12.sp) }
-        }
-    }
-}
-
-private fun nextPrayer(times: PrayerTimes, nowMillis: Long): Triple<String, String, Long>? {
-    val now = Calendar.getInstance().apply { timeInMillis = nowMillis }
-    val entries = listOf("الفجر" to times.fajr, "الظهر" to times.dhuhr, "العصر" to times.asr, "المغرب" to times.maghrib, "العشاء" to times.isha)
-    for ((name, time) in entries) {
-        val minute = parsePrayerMinute(time)
-        val target = Calendar.getInstance().apply { timeInMillis = nowMillis; set(Calendar.HOUR_OF_DAY, minute / 60); set(Calendar.MINUTE, minute % 60); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) }
-        if (target.timeInMillis > nowMillis) return Triple(name, time, target.timeInMillis)
-    }
-    val minute = parsePrayerMinute(times.fajr)
-    val tomorrow = Calendar.getInstance().apply { timeInMillis = nowMillis; add(Calendar.DAY_OF_YEAR, 1); set(Calendar.HOUR_OF_DAY, minute / 60); set(Calendar.MINUTE, minute % 60); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) }
-    return Triple("الفجر", times.fajr, tomorrow.timeInMillis)
-}
-
-private fun parsePrayerMinute(value: String): Int {
-    val clean = value.replace("ص", "").replace("م", "").trim()
-    val parts = clean.split(":")
-    var hour = parts.getOrNull(0)?.toIntOrNull() ?: 0
-    val minute = parts.getOrNull(1)?.toIntOrNull() ?: 0
-    if (value.contains("م") && hour < 12) hour += 12
-    if (value.contains("ص") && hour == 12) hour = 0
-    return hour * 60 + minute
-}
-
-private fun countdown(ms: Long): String {
-    val total = (ms / 1000).coerceAtLeast(0)
-    return String.format(Locale("ar"), "%02d:%02d:%02d", total / 3600, (total % 3600) / 60, total % 60)
 }
 
 private fun gregorianDate(): String = SimpleDateFormat("EEEE، d MMMM yyyy", Locale("ar")).format(Date())
 
+private fun islamicDate(calendar: Calendar): String {
+    val day = calendar.get(Calendar.DAY_OF_MONTH)
+    val month = calendar.get(Calendar.MONTH) + 1
+    val year = calendar.get(Calendar.YEAR)
+    val jd = (367 * year - (7 * (year + (month + 9) / 12)) / 4 + (275 * month) / 9 + day + 1721013.5)
+    val l = jd.toLong() - 1948440 + 10632
+    val n = (l - 1) / 10631
+    val ll = l - 10631 * n + 354
+    val j = ((10985 - ll) / 5316) * ((50 * ll) / 17719) + (ll / 5670) * ((43 * ll) / 15238)
+    val monthH = (24 * j) / 709
+    val dayH = ll - (709 * monthH) / 24
+    val yearH = 30 * n + j - 30
+    val months = listOf("محرم", "صفر", "ربيع الأول", "ربيع الآخر", "جمادى الأولى", "جمادى الآخرة", "رجب", "شعبان", "رمضان", "شوال", "ذو القعدة", "ذو الحجة")
+    return "$dayH ${months[(monthH - 1).coerceIn(0, 11)]} $yearH هـ"
+}
+
 private fun ramadanCountdown(): String {
-    val target = islamicToGregorianMillis(1448, 9, 1)
-    val diff = target - System.currentTimeMillis()
-    if (diff <= 0) return "رمضان الحالي أو القادم يحتاج تحديث الرؤية الرسمية"
-    val days = diff / 86_400_000L
-    val hours = (diff % 86_400_000L) / 3_600_000L
-    return "باقي تقريبًا $days يوم و$hours ساعة"
+    val now = Calendar.getInstance()
+    var target = Calendar.getInstance().apply {
+        set(Calendar.MONTH, Calendar.FEBRUARY)
+        set(Calendar.DAY_OF_MONTH, 18)
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }
+    if (!target.after(now)) target.add(Calendar.YEAR, 1)
+    val days = ((target.timeInMillis - now.timeInMillis) / 86_400_000L).coerceAtLeast(0)
+    return "باقي تقريبًا $days يومًا"
 }
 
-private fun islamicDate(gregorian: Calendar): String {
-    val (y, m, d) = gregorianToIslamic(gregorian.get(Calendar.YEAR), gregorian.get(Calendar.MONTH) + 1, gregorian.get(Calendar.DAY_OF_MONTH))
-    val months = arrayOf("محرم", "صفر", "ربيع الأول", "ربيع الآخر", "جمادى الأولى", "جمادى الآخرة", "رجب", "شعبان", "رمضان", "شوال", "ذو القعدة", "ذو الحجة")
-    return "$d ${months[m - 1]} $y هـ"
+private fun countdown(millis: Long): String {
+    if (millis <= 0) return "الآن"
+    val totalSeconds = millis / 1000
+    val hours = totalSeconds / 3600
+    val minutes = (totalSeconds % 3600) / 60
+    val seconds = totalSeconds % 60
+    return String.format(Locale.US, "%02d:%02d:%02d", hours, minutes, seconds)
 }
 
-private fun gregorianToIslamic(y: Int, m: Int, d: Int): Triple<Int, Int, Int> {
-    val jd = gregorianToJd(y, m, d)
-    val l0 = jd - 1948440 + 10632
-    val n = (l0 - 1) / 10631
-    var l = l0 - 10631 * n + 354
-    val j = ((10985 - l) / 5316) * ((50 * l) / 17719) + (l / 5670) * ((43 * l) / 15238)
-    l = l - ((30 - j) / 15) * ((17719 * j) / 50) - (j / 16) * ((15238 * j) / 43) + 29
-    val month = (24 * l) / 709
-    val day = l - (709 * month) / 24
-    val year = 30 * n + j - 30
-    return Triple(year, month, day)
+private fun nextPrayer(prayers: List<PrayerCalculator.PrayerTime>, now: Long): Triple<String, String, Long>? {
+    val format = SimpleDateFormat("HH:mm", Locale.US)
+    val current = Calendar.getInstance().apply { timeInMillis = now }
+    val currentMinutes = current.get(Calendar.HOUR_OF_DAY) * 60 + current.get(Calendar.MINUTE)
+    val next = prayers.mapNotNull { prayer ->
+        val parts = prayer.time.split(":")
+        if (parts.size != 2) return@mapNotNull null
+        val minutes = parts[0].toIntOrNull()?.times(60)?.plus(parts[1].toIntOrNull() ?: return@mapNotNull null) ?: return@mapNotNull null
+        Triple(prayer.name, prayer.time, minutes)
+    }.firstOrNull { it.third > currentMinutes }
+    return if (next != null) {
+        val target = Calendar.getInstance().apply {
+            timeInMillis = now
+            set(Calendar.HOUR_OF_DAY, next.third / 60)
+            set(Calendar.MINUTE, next.third % 60)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        Triple(next.first, format.format(target.time), target.timeInMillis)
+    } else prayers.firstOrNull()?.let {
+        val parts = it.time.split(":")
+        if (parts.size != 2) null else {
+            val target = Calendar.getInstance().apply {
+                timeInMillis = now
+                add(Calendar.DAY_OF_MONTH, 1)
+                set(Calendar.HOUR_OF_DAY, parts[0].toInt())
+                set(Calendar.MINUTE, parts[1].toInt())
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
+            Triple(it.name, it.time, target.timeInMillis)
+        }
+    }
 }
 
-private fun gregorianToJd(y: Int, m: Int, d: Int): Int {
-    val a = (14 - m) / 12
-    val yy = y + 4800 - a
-    val mm = m + 12 * a - 3
-    return d + (153 * mm + 2) / 5 + 365 * yy + yy / 4 - yy / 100 + yy / 400 - 32045
-}
-
-private fun islamicToGregorianMillis(year: Int, month: Int, day: Int): Long {
-    val jd = day + kotlin.math.ceil(29.5 * (month - 1)).toInt() + (year - 1) * 354 + ((3 + 11 * year) / 30) + 1948439
-    val j = jd + 32044
-    val g = j / 146097
-    val dg = j % 146097
-    val c = ((dg / 36524) + 1) * 3 / 4
-    val dc = dg - c * 36524
-    val b = dc / 1461
-    val db = dc % 1461
-    val a = ((db / 365) + 1) * 3 / 4
-    val da = db - a * 365
-    val y = g * 400 + c * 100 + b * 4 + a
-    val m = (da * 5 + 308) / 153 - 2
-    val d = da - (m + 4) * 153 / 5 + 122
-    val yearG = y - 4800 + (m + 2) / 12
-    val monthG = (m + 2) % 12 + 1
-    val dayG = d + 1
-    return Calendar.getInstance().apply { set(yearG, monthG - 1, dayG, 0, 0, 0); set(Calendar.MILLISECOND, 0) }.timeInMillis
-}
-
-private fun qiblaBearing(latitude: Double, longitude: Double): Double {
-    val kaabaLat = Math.toRadians(21.422487)
-    val kaabaLon = Math.toRadians(39.826206)
+private fun qiblaBearing(latitude: Double, longitude: Double): Float {
+    val kaabaLat = Math.toRadians(21.4225)
+    val kaabaLon = Math.toRadians(39.8262)
     val lat = Math.toRadians(latitude)
     val lon = Math.toRadians(longitude)
     val dLon = kaabaLon - lon
     val y = sin(dLon)
     val x = cos(lat) * sin(kaabaLat) - sin(lat) * cos(kaabaLat) * cos(dLon)
-    return (Math.toDegrees(atan2(y, x)) + 360.0) % 360.0
-}
-
-private object WadhkurColors {
-    val background = Color(0xFF071116)
-    val surface = Color(0xFF0E1D25)
-    val surface2 = Color(0xFF142833)
-    val edge = Color(0xFF235060)
-    val primary = Color(0xFF4DFFAA)
-    val text = Color(0xFFEAF7F1)
-    val muted = Color(0xFF9EB5BD)
-}
-
-@Composable
-private fun WadhkurTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = androidx.compose.material3.darkColorScheme(primary = WadhkurColors.primary, background = WadhkurColors.background, surface = WadhkurColors.surface, onPrimary = Color.Black, onBackground = WadhkurColors.text, onSurface = WadhkurColors.text), content = content)
+    var bearing = Math.toDegrees(atan2(y, x)).toFloat()
+    if (bearing < 0) bearing += 360f
+    return bearing
 }
