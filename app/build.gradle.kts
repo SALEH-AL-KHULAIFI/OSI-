@@ -11,9 +11,9 @@ android {
     defaultConfig {
         applicationId = "com.saleh.wadhkur"
         minSdk = 23
-        targetSdk = 35
-        versionCode = 300
-        versionName = "3.0.0"
+        targetSdk = 36
+        versionCode = 400
+        versionName = "4.0.0"
     }
 
     buildFeatures {
@@ -52,5 +52,10 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.2")
     implementation("androidx.core:core-ktx:1.17.0")
+
+    // Google Mobile Ads: test configuration is used until the developer's AdMob IDs are supplied.
+    implementation("com.google.android.gms:play-services-ads:25.4.0")
+    implementation("com.google.android.ump:user-messaging-platform:4.0.0")
+
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
