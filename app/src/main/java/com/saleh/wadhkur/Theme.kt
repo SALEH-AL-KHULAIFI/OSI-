@@ -1,9 +1,11 @@
 package com.saleh.wadhkur
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
 
 object WadhkurColors {
     val background = Color(0xFF071116)
@@ -27,5 +29,16 @@ fun WadhkurTheme(content: @Composable () -> Unit) {
         onSurface = WadhkurColors.text,
         onSurfaceVariant = WadhkurColors.muted
     )
-    MaterialTheme(colorScheme = colors, content = content)
+    val typography = Typography().let { type ->
+        type.copy(
+            displayLarge = type.displayLarge.copy(fontFamily = FontFamily.Serif),
+            headlineLarge = type.headlineLarge.copy(fontFamily = FontFamily.Serif),
+            headlineMedium = type.headlineMedium.copy(fontFamily = FontFamily.Serif),
+            titleLarge = type.titleLarge.copy(fontFamily = FontFamily.Serif),
+            bodyLarge = type.bodyLarge.copy(fontFamily = FontFamily.Serif),
+            bodyMedium = type.bodyMedium.copy(fontFamily = FontFamily.Serif),
+            labelLarge = type.labelLarge.copy(fontFamily = FontFamily.Serif)
+        )
+    }
+    MaterialTheme(colorScheme = colors, typography = typography, content = content)
 }
