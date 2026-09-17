@@ -86,18 +86,10 @@ object PrayerCalculator {
         var normalized = minutes % 1440.0
         if (normalized < 0.0) normalized += 1440.0
 
-        var totalMinutes = normalized.roundToInt() % 1440
-        if (totalMinutes < 0) totalMinutes += 1440
-
+        val totalMinutes = (normalized.roundToInt() % 1440 + 1440) % 1440
         val hour24 = totalMinutes / 60
         val minute = totalMinutes % 60
-        val suffix = if (hour24 >= 12) "م" else "ص"
-        val displayHour = when {
-            hour24 == 0 -> 12
-            hour24 > 12 -> hour24 - 12
-            else -> hour24
-        }
 
-        return String.format(Locale.US, "%02d:%02d %s", displayHour, minute, suffix)
+        return String.format(Locale.US, "%02d:%02d", hour24, minute)
     }
 }
