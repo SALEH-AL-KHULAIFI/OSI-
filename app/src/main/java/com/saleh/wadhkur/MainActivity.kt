@@ -2,2755 +2,745 @@ package com.saleh.wadhkur
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.location.Location
 import android.location.LocationManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.widget.Toast
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowForward
-import androidx.compose.material.icons.filled.ChevronLeft
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.material.icons.filled.Brightness4
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Explore
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.PrivacyTip
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.SelfImprovement
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
+import com.google.android.gms.ads.AdRequest
+import com.google.android.gms.ads.AdSize
+import com.google.android.gms.ads.AdView
+import com.google.android.gms.ads.MobileAds
+import com.google.android.ump.ConsentInformation
+import com.google.android.ump.ConsentRequestParameters
+import com.google.android.ump.UserMessagingPlatform
 import kotlinx.coroutines.delay
+import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
 import java.util.Locale
-import kotlin.math.max
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.sin
 
-class MainActivity : ComponentActivity() {
+class MainActivity : ComponentActivity(), SensorEventListener {
 
-    private val green = Color(0xFF39FF8F)
-    private val cyan = Color(0xFF55DCFF)
-    private val purple = Color(0xFFB56CFF)
-    private val bg = Color(0xFF061016)
-    private val card = Color(0xFF0D1B23)
-    private val card2 = Color(0xFF101F28)
-    private val muted = Color(0xFF9AAFB8)
-
-    /*
-     * رقم يتغير عند تحديث الموقع.
-     *
-     * لا نستخدم recreate() بعد الآن.
-     * هذا المتغير يجعل Compose يعيد قراءة الموقع
-     * من SharedPreferences ويحدث واجهة الصلاة مباشرة.
-     */
-    private var locationUpdateVersion by mutableIntStateOf(0)
+    companion object {
+        const val EMAIL = "saleh.mabkhot@hotmail.com"
+        private const val LOCATION_PREFS = "wadhkur_location"
+    }
 
     private val locationLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) { result ->
-
-        val granted =
-            result[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
-                result[Manifest.permission.ACCESS_COARSE_LOCATION] == true
-
-        if (granted) {
-
-            saveBestLocation()
-
-            Toast.makeText(
-                this,
-                "تم تحديث موقع مواقيت الصلاة",
-                Toast.LENGTH_SHORT
-            ).show()
-
-        } else {
-
-            Toast.makeText(
-                this,
-                "لم يتم السماح بالموقع",
-                Toast.LENGTH_SHORT
-            ).show()
-        }
+    ) { permissions ->
+        if (permissions.values.any { it }) saveBestLocation()
     }
+
+    private var locationVersion by mutableIntStateOf(0)
+    private lateinit var sensorManager: SensorManager
+    private var rotationSensor: Sensor? = null
+    private var azimuth by mutableFloatStateOf(0f)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        requestNotifications()
-        requestLocation()
-
-        val requestedDhikr =
-            intent?.getStringExtra("show_dhikr")
+        sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
+        rotationSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
+        requestNotificationsIfNeeded()
+        initializeAdsAndConsent()
+        ReminderScheduler.scheduleAll(this)
 
         setContent {
             WadhkurTheme {
                 WadhkurApp(
-                    requestedDhikr = requestedDhikr,
-                    locationUpdateVersion = locationUpdateVersion,
-                    onRequestLocation = {
-                        requestLocation()
-                    }
+                    locationVersion = locationVersion,
+                    requestLocation = { requestLocationWithDisclosureAlreadyShown() },
+                    openEmail = { openEmail() },
+                    azimuth = azimuth
                 )
             }
         }
-
-        ReminderScheduler.scheduleAll(this)
     }
 
-    private fun requestNotifications() {
+    override fun onResume() {
+        super.onResume()
+        rotationSensor?.let { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI) }
+    }
 
-        if (
-            Build.VERSION.SDK_INT >= 33 &&
-            checkSelfPermission(
-                Manifest.permission.POST_NOTIFICATIONS
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
+    override fun onPause() {
+        sensorManager.unregisterListener(this)
+        super.onPause()
+    }
 
-            requestPermissions(
-                arrayOf(
-                    Manifest.permission.POST_NOTIFICATIONS
-                ),
-                9001
-            )
+    override fun onSensorChanged(event: SensorEvent) {
+        if (event.sensor.type != Sensor.TYPE_ROTATION_VECTOR) return
+        val rotation = FloatArray(9)
+        val orientation = FloatArray(3)
+        SensorManager.getRotationMatrixFromVector(rotation, event.values)
+        SensorManager.getOrientation(rotation, orientation)
+        var degrees = Math.toDegrees(orientation[0].toDouble()).toFloat()
+        if (degrees < 0) degrees += 360f
+        azimuth = degrees
+    }
+
+    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
+
+    private fun requestNotificationsIfNeeded() {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 9001)
         }
     }
 
-    private fun requestLocation() {
-
-        val fine =
-            checkSelfPermission(
-                Manifest.permission.ACCESS_FINE_LOCATION
-            ) == PackageManager.PERMISSION_GRANTED
-
-        val coarse =
-            checkSelfPermission(
-                Manifest.permission.ACCESS_COARSE_LOCATION
-            ) == PackageManager.PERMISSION_GRANTED
-
+    private fun requestLocationWithDisclosureAlreadyShown() {
+        val fine = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val coarse = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
         if (!fine && !coarse) {
-
-            locationLauncher.launch(
-                arrayOf(
-                    Manifest.permission.ACCESS_FINE_LOCATION,
-                    Manifest.permission.ACCESS_COARSE_LOCATION
-                )
-            )
-
-        } else {
-
-            saveBestLocation()
-        }
+            locationLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+        } else saveBestLocation()
     }
 
-    /*
-     * الحصول على موقع الهاتف بشكل موثوق.
-     *
-     * المنهج:
-     *
-     * 1. التأكد من وجود إذن الموقع.
-     * 2. التأكد من أن خدمة الموقع مفعلة.
-     * 3. استخدام LastKnownLocation كاستجابة سريعة.
-     * 4. طلب موقع حديث من النظام.
-     * 5. حفظ أفضل إحداثيات في SharedPreferences.
-     * 6. تحديث Compose مباشرة بدون recreate().
-     */
     private fun saveBestLocation() {
-
-        val manager =
-            getSystemService(Context.LOCATION_SERVICE)
-                as LocationManager
-
-        val hasFine =
-            checkSelfPermission(
-                Manifest.permission.ACCESS_FINE_LOCATION
-            ) == PackageManager.PERMISSION_GRANTED
-
-        val hasCoarse =
-            checkSelfPermission(
-                Manifest.permission.ACCESS_COARSE_LOCATION
-            ) == PackageManager.PERMISSION_GRANTED
-
-        if (!hasFine && !hasCoarse) {
-            return
-        }
-
-        val prefs =
-            getSharedPreferences(
-                "wadhkur_location",
-                MODE_PRIVATE
-            )
-
-        var locationSaved = false
-
-        fun saveLocation(location: Location) {
-
-            if (
-                !location.latitude.isFinite() ||
-                !location.longitude.isFinite()
-            ) {
-                return
-            }
-
-            if (
-                location.latitude !in -90.0..90.0 ||
-                location.longitude !in -180.0..180.0
-            ) {
-                return
-            }
-
-            prefs.edit()
-                .putFloat(
-                    "lat",
-                    location.latitude.toFloat()
-                )
-                .putFloat(
-                    "lon",
-                    location.longitude.toFloat()
-                )
-                .apply()
-
-            locationSaved = true
-
-            /*
-             * مهم جدًا:
-             *
-             * لا نستخدم recreate() هنا.
-             * تحديث متغير Compose يكفي لإعادة رسم
-             * واجهة مواقيت الصلاة بالموقع الجديد.
-             */
-            locationUpdateVersion++
-        }
-
+        val manager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        val fine = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val coarse = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (!fine && !coarse) return
         try {
-
-            /*
-             * التأكد من أن خدمة الموقع مفعلة.
-             */
-            val locationEnabled =
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-
-                    manager.isLocationEnabled
-
-                } else {
-
-                    manager.isProviderEnabled(
-                        LocationManager.GPS_PROVIDER
-                    ) ||
-                        manager.isProviderEnabled(
-                            LocationManager.NETWORK_PROVIDER
-                        )
+            var best: Location? = null
+            for (provider in manager.getProviders(true)) {
+                val value = manager.getLastKnownLocation(provider) ?: continue
+                if (best == null || value.accuracy < best!!.accuracy) best = value
+            }
+            best?.let {
+                getSharedPreferences(LOCATION_PREFS, MODE_PRIVATE).edit()
+                    .putFloat("lat", it.latitude.toFloat())
+                    .putFloat("lon", it.longitude.toFloat())
+                    .apply()
+                locationVersion++
+            }
+            if (Build.VERSION.SDK_INT >= 30) {
+                val provider = when {
+                    manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER) -> LocationManager.NETWORK_PROVIDER
+                    manager.isProviderEnabled(LocationManager.GPS_PROVIDER) -> LocationManager.GPS_PROVIDER
+                    else -> null
                 }
-
-            if (!locationEnabled) {
-
-                Toast.makeText(
-                    this,
-                    "فعّل خدمة الموقع في الهاتف",
-                    Toast.LENGTH_SHORT
-                ).show()
-
-                return
-            }
-
-            /*
-             * الحصول على آخر موقع متاح.
-             *
-             * نبحث في جميع المزودين المتاحين ونختار
-             * الموقع الأفضل من حيث الدقة.
-             */
-            var bestLocation: Location? = null
-
-            val providers =
-                manager.getProviders(true)
-
-            for (provider in providers) {
-
-                try {
-
-                    val location =
-                        manager.getLastKnownLocation(provider)
-
-                    if (location != null) {
-
-                        if (
-                            !location.latitude.isFinite() ||
-                            !location.longitude.isFinite()
-                        ) {
-                            continue
-                        }
-
-                        if (
-                            location.latitude !in -90.0..90.0 ||
-                            location.longitude !in -180.0..180.0
-                        ) {
-                            continue
-                        }
-
-                        if (
-                            bestLocation == null ||
-                            location.accuracy <
-                            bestLocation.accuracy
-                        ) {
-                            bestLocation = location
-                        }
-                    }
-
-                } catch (_: SecurityException) {
-                }
-            }
-
-            /*
-             * حفظ الموقع القديم/السريع أولًا.
-             */
-            if (bestLocation != null) {
-                saveLocation(bestLocation)
-            }
-
-            /*
-             * Android 11 وما بعده:
-             *
-             * نطلب موقعًا حديثًا من النظام.
-             *
-             * نفضّل NETWORK لأنه غالبًا أسرع في تحديد
-             * الموقع داخل المدن، وإذا لم يكن متاحًا
-             * نستخدم GPS.
-             */
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-
-                val provider =
-                    when {
-
-                        manager.isProviderEnabled(
-                            LocationManager.NETWORK_PROVIDER
-                        ) ->
-                            LocationManager.NETWORK_PROVIDER
-
-                        manager.isProviderEnabled(
-                            LocationManager.GPS_PROVIDER
-                        ) ->
-                            LocationManager.GPS_PROVIDER
-
-                        else ->
-                            null
-                    }
-
-                if (provider == null) {
-
-                    if (!locationSaved) {
-
-                        Toast.makeText(
-                            this,
-                            "تعذر تحديد موقع الهاتف",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    }
-
-                    return
-                }
-
-                manager.getCurrentLocation(
-                    provider,
-                    null,
-                    mainExecutor
-                ) { location ->
-
-                    if (location != null) {
-
-                        saveLocation(location)
-
-                    } else if (!locationSaved) {
-
-                        Toast.makeText(
-                            this,
-                            "تعذر الحصول على الموقع الحالي",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    }
-                }
-
-            } else {
-
-                /*
-                 * Android 10 وما قبله:
-                 *
-                 * نستخدم LocationListener للحصول
-                 * على أول قراءة حديثة.
-                 */
-                val provider =
-                    when {
-
-                        manager.isProviderEnabled(
-                            LocationManager.NETWORK_PROVIDER
-                        ) ->
-                            LocationManager.NETWORK_PROVIDER
-
-                        manager.isProviderEnabled(
-                            LocationManager.GPS_PROVIDER
-                        ) ->
-                            LocationManager.GPS_PROVIDER
-
-                        else ->
-                            null
-                    }
-
-                if (provider == null) {
-
-                    if (!locationSaved) {
-
-                        Toast.makeText(
-                            this,
-                            "تعذر تحديد موقع الهاتف",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    }
-
-                    return
-                }
-
-                val listener =
-                    object : android.location.LocationListener {
-
-                        override fun onLocationChanged(
-                            location: Location
-                        ) {
-
-                            saveLocation(location)
-
-                            try {
-                                manager.removeUpdates(this)
-                            } catch (_: Exception) {
-                            }
-                        }
-                    }
-
-                manager.requestLocationUpdates(
-                    provider,
-                    0L,
-                    0f,
-                    listener,
-                    android.os.Looper.getMainLooper()
-                )
-            }
-
-        } catch (_: SecurityException) {
-
-            Toast.makeText(
-                this,
-                "لا يوجد إذن للوصول إلى الموقع",
-                Toast.LENGTH_SHORT
-            ).show()
-
-        } catch (_: Exception) {
-
-            Toast.makeText(
-                this,
-                "تعذر الحصول على الموقع",
-                Toast.LENGTH_SHORT
-            ).show()
-        }
-    }
-
-    @Composable
-    private fun WadhkurApp(
-        requestedDhikr: String?,
-        locationUpdateVersion: Int,
-        onRequestLocation: () -> Unit
-    ) {
-
-        /*
-         * قراءة هذا المتغير هنا مهمة:
-         *
-         * عندما يتم حفظ موقع جديد، يتغير
-         * locationUpdateVersion، فيعيد Compose
-         * تركيب الواجهة التي تعتمد على الموقع.
-         *
-         * لا نحتاج إلى recreate().
-         */
-        val currentLocationVersion = locationUpdateVersion
-
-        var screen by remember {
-            mutableStateOf("home")
-        }
-
-        var popup by remember {
-            mutableStateOf(requestedDhikr)
-        }
-
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(bg)
-        ) {
-
-            when (screen) {
-
-                "home" -> HomeScreen(
-                    locationUpdateVersion = currentLocationVersion,
-                    onDhikr = {
-                        screen = "dhikr"
-                    },
-                    onReminders = {
-                        screen = "reminders"
-                    },
-                    onPrayer = {
-                        screen = "prayer"
-                    },
-                    onAbout = {
-                        screen = "about"
-                    },
-                    onTasbeeh = {
-                        screen = "tasbeeh"
-                    }
-                )
-
-                "dhikr" -> DhikrScreen {
-                    screen = "home"
-                }
-
-                "reminders" -> ReminderScreen {
-                    screen = "home"
-                }
-
-                "prayer" -> PrayerScreen(
-                    locationUpdateVersion = currentLocationVersion,
-                    onBack = {
-                        screen = "home"
-                    },
-                    onLocation = onRequestLocation
-                )
-
-                "tasbeeh" -> TasbeehScreen {
-                    screen = "home"
-                }
-
-                "about" -> AboutScreen {
-                    screen = "home"
-                }
-            }
-
-            if (popup != null) {
-
-                DhikrPopup(
-                    text = popup!!,
-                    onDismiss = {
-                        popup = null
-                    }
-                )
-            }
-        }
-    }
-
-    @Composable
-    private fun HomeScreen(
-        locationUpdateVersion: Int,
-        onDhikr: () -> Unit,
-        onReminders: () -> Unit,
-        onPrayer: () -> Unit,
-        onAbout: () -> Unit,
-        onTasbeeh: () -> Unit
-    ) {
-
-        /*
-         * نستخدم القيمة حتى تكون HomeScreen
-         * مرتبطة بتحديث الموقع.
-         */
-        val currentLocationVersion =
-            locationUpdateVersion
-
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(
-                start = 16.dp,
-                end = 16.dp,
-                top = 14.dp,
-                bottom = 24.dp
-            ),
-            verticalArrangement =
-                Arrangement.spacedBy(12.dp)
-        ) {
-
-            item {
-                Header()
-            }
-
-            item {
-                RamadanCounter()
-            }
-
-            item {
-                NextPrayerCard(
-                    locationUpdateVersion =
-                        currentLocationVersion
-                )
-            }
-
-            item {
-                MainCard(
-                    icon = "🤲",
-                    title = "الأدعية والأذكار",
-                    subtitle = "أذكار عامة وصباح ومساء",
-                    action = onDhikr
-                )
-            }
-
-            item {
-                MainCard(
-                    icon = "🔔",
-                    title = "تذكير الذكر",
-                    subtitle = "تذكيرات عامة وأذكار الصباح والمساء",
-                    action = onReminders
-                )
-            }
-
-            item {
-                MainCard(
-                    icon = "🕌",
-                    title = "مواقيت الصلاة",
-                    subtitle = "حساب محلي حسب موقع الهاتف",
-                    action = onPrayer
-                )
-            }
-
-            item {
-                MainCard(
-                    icon = "📿",
-                    title = "المسبحة",
-                    subtitle = "عداد تسبيح مع أهداف متعددة",
-                    action = onTasbeeh
-                )
-            }
-
-            item {
-                MainCard(
-                    icon = "ℹ️",
-                    title = "عن التطبيق",
-                    subtitle = "وٌ ذکْــر 3.0.0 • صالح الخليفي",
-                    action = onAbout
-                )
-            }
-        }
-    }
-
-    @Composable
-    private fun Header() {
-
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .padding(
-                    horizontal = 20.dp,
-                    vertical = 16.dp
-                ),
-            horizontalAlignment =
-                Alignment.CenterHorizontally
-        ) {
-
-            Text(
-                text = "وٌ ذکْــر",
-                color = green,
-                fontSize = 34.sp,
-                fontWeight = FontWeight.Bold
-            )
-
-            Spacer(
-                Modifier.height(4.dp)
-            )
-
-            Text(
-                text = "وَاذْكُر رَّبَّكَ إِذَا نَسِيتَ",
-                color = muted,
-                fontSize = 13.sp,
-                textAlign = TextAlign.Center
-            )
-        }
-    }
-
-    @Composable
-    private fun RamadanCounter() {
-
-        val remaining = remember {
-            mutableStateOf(
-                getRamadanRemaining()
-            )
-        }
-
-        LaunchedEffect(Unit) {
-
-            while (true) {
-
-                remaining.value =
-                    getRamadanRemaining()
-
-                delay(1000L)
-            }
-        }
-
-        val data = remaining.value
-
-        NeonCard(
-            borderColor = purple
-        ) {
-
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(18.dp),
-                horizontalAlignment =
-                    Alignment.CenterHorizontally
-            ) {
-
-                Text(
-                    "🌙  رمضان",
-                    color = purple,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold
-                )
-
-                Spacer(
-                    Modifier.height(5.dp)
-                )
-
-                Text(
-                    "متبقي على رمضان القادم",
-                    color = muted,
-                    fontSize = 13.sp
-                )
-
-                Spacer(
-                    Modifier.height(14.dp)
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement =
-                        Arrangement.SpaceEvenly
-                ) {
-
-                    CountdownUnit(
-                        value = data.days,
-                        label = "يوم"
-                    )
-
-                    CountdownUnit(
-                        value = data.hours,
-                        label = "ساعة"
-                    )
-
-                    CountdownUnit(
-                        value = data.minutes,
-                        label = "دقيقة"
-                    )
-
-                    CountdownUnit(
-                        value = data.seconds,
-                        label = "ثانية"
-                    )
-                }
-            }
-        }
-    }
-
-    private data class RamadanRemaining(
-        val days: Long,
-        val hours: Long,
-        val minutes: Long,
-        val seconds: Long
-    )
-
-    private fun getRamadanRemaining(): RamadanRemaining {
-
-        val target = Calendar.getInstance().apply {
-
-            set(
-                Calendar.YEAR,
-                2027
-            )
-
-            set(
-                Calendar.MONTH,
-                Calendar.FEBRUARY
-            )
-
-            set(
-                Calendar.DAY_OF_MONTH,
-                8
-            )
-
-            set(
-                Calendar.HOUR_OF_DAY,
-                0
-            )
-
-            set(
-                Calendar.MINUTE,
-                0
-            )
-
-            set(
-                Calendar.SECOND,
-                0
-            )
-
-            set(
-                Calendar.MILLISECOND,
-                0
-            )
-        }
-
-        val now =
-            Calendar.getInstance()
-
-        var difference =
-            target.timeInMillis -
-                now.timeInMillis
-
-        if (difference < 0) {
-            difference = 0
-        }
-
-        val totalSeconds =
-            difference / 1000L
-
-        val days =
-            totalSeconds / 86400L
-
-        val hours =
-            (totalSeconds % 86400L) / 3600L
-
-        val minutes =
-            (totalSeconds % 3600L) / 60L
-
-        val seconds =
-            totalSeconds % 60L
-
-        return RamadanRemaining(
-            days = days,
-            hours = hours,
-            minutes = minutes,
-            seconds = seconds
-        )
-    }
-
-    @Composable
-    private fun CountdownUnit(
-        value: Long,
-        label: String
-    ) {
-
-        Column(
-            horizontalAlignment =
-                Alignment.CenterHorizontally
-        ) {
-
-            Text(
-                text = "%02d".format(
-                    Locale.US,
-                    value
-                ),
-                color = Color.White,
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold
-            )
-
-            Text(
-                text = label,
-                color = muted,
-                fontSize = 10.sp
-            )
-        }
-    }
-
-    @Composable
-    private fun NextPrayerCard(
-        locationUpdateVersion: Int
-    ) {
-
-        /*
-         * قراءة المتغير تربط البطاقة بتحديث الموقع.
-         */
-        val currentLocationVersion =
-            locationUpdateVersion
-
-        val locationPrefs =
-            getSharedPreferences(
-                "wadhkur_location",
-                MODE_PRIVATE
-            )
-
-        val lat =
-            locationPrefs.getFloat(
-                "lat",
-                Float.NaN
-            )
-
-        val lon =
-            locationPrefs.getFloat(
-                "lon",
-                Float.NaN
-            )
-
-        /*
-         * استخدام القيمة يمنع اعتبارها غير مستخدمة
-         * ويضمن إعادة تركيب البطاقة عند تغير الموقع.
-         */
-        currentLocationVersion.hashCode()
-
-        if (lat.isNaN() || lon.isNaN()) {
-
-            NeonCard(
-                borderColor = cyan
-            ) {
-
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(20.dp),
-                    horizontalAlignment =
-                        Alignment.CenterHorizontally
-                ) {
-
-                    Text(
-                        "🕌  الصلاة القادمة",
-                        color = cyan,
-                        fontSize = 21.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    Spacer(
-                        Modifier.height(8.dp)
-                    )
-
-                    Text(
-                        "اسمح بالموقع لحساب الصلاة القادمة",
-                        color = muted,
-                        fontSize = 13.sp,
-                        textAlign = TextAlign.Center
-                    )
-                }
-            }
-
-            return
-        }
-
-        var nowMillis by remember {
-            mutableLongStateOf(
-                System.currentTimeMillis()
-            )
-        }
-
-        LaunchedEffect(Unit) {
-
-            while (true) {
-
-                nowMillis =
-                    System.currentTimeMillis()
-
-                delay(1000L)
-            }
-        }
-
-        val info =
-            remember(
-                lat,
-                lon,
-                nowMillis / 1000L
-            ) {
-                getNextPrayerInfo(
-                    lat.toDouble(),
-                    lon.toDouble()
-                )
-            }
-
-        NeonCard(
-            borderColor = green
-        ) {
-
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(20.dp),
-                horizontalAlignment =
-                    Alignment.CenterHorizontally
-            ) {
-
-                Text(
-                    "🕌  الصلاة القادمة",
-                    color = green,
-                    fontSize = 21.sp,
-                    fontWeight = FontWeight.Bold
-                )
-
-                Spacer(
-                    Modifier.height(8.dp)
-                )
-
-                Text(
-                    info.name,
-                    color = Color.White,
-                    fontSize = 27.sp,
-                    fontWeight = FontWeight.Bold
-                )
-
-                Spacer(
-                    Modifier.height(2.dp)
-                )
-
-                Text(
-                    info.timeText,
-                    color = cyan,
-                    fontSize = 16.sp
-                )
-
-                Spacer(
-                    Modifier.height(12.dp)
-                )
-
-                Text(
-                    formatDuration(
-                        info.remainingMillis
-                    ),
-                    color = green,
-                    fontSize = 30.sp,
-                    fontWeight = FontWeight.Bold
-                )
-
-                Spacer(
-                    Modifier.height(3.dp)
-                )
-
-                Text(
-                    "الوقت المتبقي",
-                    color = muted,
-                    fontSize = 11.sp
-                )
-            }
-        }
-    }
-
-    private data class NextPrayerInfo(
-        val name: String,
-        val timeText: String,
-        val remainingMillis: Long
-    )
-
-    private fun getNextPrayerInfo(
-        latitude: Double,
-        longitude: Double
-    ): NextPrayerInfo {
-
-        val now =
-            Calendar.getInstance()
-
-        val todayTimes =
-            PrayerCalculator.calculate(
-                latitude,
-                longitude,
-                now
-            )
-
-        val todayList =
-            prayerList(todayTimes)
-
-        for (item in todayList) {
-
-            val time =
-                parsePrayerTime(
-                    item.second,
-                    now
-                )
-
-            if (
-                time != null &&
-                time.timeInMillis > now.timeInMillis
-            ) {
-
-                return NextPrayerInfo(
-                    name = item.first,
-                    timeText = item.second,
-                    remainingMillis =
-                        time.timeInMillis -
-                            now.timeInMillis
-                )
-            }
-        }
-
-        val tomorrow =
-            Calendar.getInstance().apply {
-                add(
-                    Calendar.DAY_OF_YEAR,
-                    1
-                )
-            }
-
-        val tomorrowTimes =
-            PrayerCalculator.calculate(
-                latitude,
-                longitude,
-                tomorrow
-            )
-
-        val fajrTime =
-            parsePrayerTime(
-                tomorrowTimes.fajr,
-                tomorrow
-            )
-
-        val remaining =
-            if (fajrTime != null) {
-
-                fajrTime.timeInMillis -
-                    now.timeInMillis
-
-            } else {
-
-                0L
-            }
-
-        return NextPrayerInfo(
-            name = "الفجر",
-            timeText = tomorrowTimes.fajr,
-            remainingMillis =
-                max(
-                    0L,
-                    remaining
-                )
-        )
-    }
-
-    private fun prayerList(
-        times: PrayerTimes
-    ): List<Pair<String, String>> {
-
-        return listOf(
-            "الفجر" to times.fajr,
-            "الظهر" to times.dhuhr,
-            "العصر" to times.asr,
-            "المغرب" to times.maghrib,
-            "العشاء" to times.isha
-        )
-    }
-
-    private fun parsePrayerTime(
-        value: String,
-        base: Calendar
-    ): Calendar? {
-
-        return try {
-
-            val parts =
-                value.trim()
-                    .split(" ")
-
-            if (parts.size < 2) {
-                return null
-            }
-
-            val hm =
-                parts[0].split(":")
-
-            if (hm.size != 2) {
-                return null
-            }
-
-            var hour =
-                hm[0].toInt()
-
-            val minute =
-                hm[1].toInt()
-
-            val suffix =
-                parts[1]
-
-            if (suffix == "م" && hour < 12) {
-                hour += 12
-            }
-
-            if (suffix == "ص" && hour == 12) {
-                hour = 0
-            }
-
-            Calendar.getInstance().apply {
-
-                timeInMillis =
-                    base.timeInMillis
-
-                set(
-                    Calendar.HOUR_OF_DAY,
-                    hour
-                )
-
-                set(
-                    Calendar.MINUTE,
-                    minute
-                )
-
-                set(
-                    Calendar.SECOND,
-                    0
-                )
-
-                set(
-                    Calendar.MILLISECOND,
-                    0
-                )
-            }
-
-        } catch (_: Exception) {
-            null
-        }
-    }
-
-    private fun formatDuration(
-        millis: Long
-    ): String {
-
-        val total =
-            max(
-                0L,
-                millis
-            ) / 1000L
-
-        val hours =
-            total / 3600L
-
-        val minutes =
-            (total % 3600L) / 60L
-
-        val seconds =
-            total % 60L
-
-        return "%02d:%02d:%02d".format(
-            Locale.US,
-            hours,
-            minutes,
-            seconds
-        )
-    }
-
-    @Composable
-    private fun MainCard(
-        icon: String,
-        title: String,
-        subtitle: String,
-        action: () -> Unit
-    ) {
-
-        Card(
-            onClick = action,
-            colors = CardDefaults.cardColors(
-                containerColor = card
-            ),
-            shape = RoundedCornerShape(22.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-
-            Row(
-                Modifier.padding(18.dp),
-                verticalAlignment =
-                    Alignment.CenterVertically
-            ) {
-
-                Text(
-                    icon,
-                    fontSize = 30.sp
-                )
-
-                Spacer(
-                    Modifier.width(16.dp)
-                )
-
-                Column(
-                    Modifier.weight(1f)
-                ) {
-
-                    Text(
-                        title,
-                        color = Color.White,
-                        fontSize = 19.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    Text(
-                        subtitle,
-                        color = muted,
-                        fontSize = 13.sp
-                    )
-                }
-
-                Icon(
-                    Icons.Default.ChevronLeft,
-                    contentDescription = null,
-                    tint = green
-                )
-            }
-        }
-    }
-
-    @Composable
-    private fun NeonCard(
-        borderColor: Color,
-        content: @Composable ColumnScope.() -> Unit
-    ) {
-
-        Card(
-            colors = CardDefaults.cardColors(
-                containerColor = card
-            ),
-            shape = RoundedCornerShape(24.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(
-                    width = 1.5.dp,
-                    color = borderColor.copy(alpha = 0.75f),
-                    shape = RoundedCornerShape(24.dp)
-                ),
-            content = content
-        )
-    }
-
-    @Composable
-    private fun DhikrScreen(
-        onBack: () -> Unit
-    ) {
-
-        var selectedTab by rememberSaveable {
-            mutableIntStateOf(0)
-        }
-
-        var index by rememberSaveable {
-            mutableIntStateOf(0)
-        }
-
-        val lists = listOf(
-            DhikrRepository.main,
-            DhikrRepository.morning,
-            DhikrRepository.evening
-        )
-
-        val titles = listOf(
-            "الأذكار العامة",
-            "أذكار الصباح",
-            "أذكار المساء"
-        )
-
-        val currentList =
-            lists[selectedTab]
-
-        if (index >= currentList.size) {
-            index = 0
-        }
-
-        val currentDhikr =
-            currentList.getOrNull(index)
-
-        Column(
-            Modifier
-                .fillMaxSize()
-                .padding(16.dp)
-        ) {
-
-            TopBar(
-                titles[selectedTab],
-                onBack
-            )
-
-            TabRow(
-                selectedTabIndex = selectedTab,
-                containerColor = card,
-                contentColor = green
-            ) {
-
-                titles.forEachIndexed { tabIndex, _ ->
-
-                    Tab(
-                        selected =
-                            selectedTab == tabIndex,
-
-                        onClick = {
-                            selectedTab = tabIndex
-                            index = 0
-                        },
-
-                        text = {
-                            Text(
-                                when (tabIndex) {
-                                    0 -> "عامة"
-                                    1 -> "الصباح"
-                                    else -> "المساء"
-                                }
-                            )
-                        }
-                    )
-                }
-            }
-
-            Spacer(
-                Modifier.height(20.dp)
-            )
-
-            if (currentDhikr != null) {
-
-                Text(
-                    "${index + 1} / ${currentList.size}",
-                    color = cyan,
-                    fontSize = 14.sp,
-                    modifier =
-                        Modifier.fillMaxWidth(),
-                    textAlign =
-                        TextAlign.Center
-                )
-
-                Spacer(
-                    Modifier.height(12.dp)
-                )
-
-                NeonCard(
-                    borderColor = green
-                ) {
-
-                    Column(
-                        Modifier
-                            .fillMaxWidth()
-                            .heightIn(
-                                min = 300.dp,
-                                max = 500.dp
-                            )
-                            .padding(24.dp),
-                        horizontalAlignment =
-                            Alignment.CenterHorizontally,
-                        verticalArrangement =
-                            Arrangement.Center
-                    ) {
-
-                        Text(
-                            when (selectedTab) {
-                                1 -> "☀️"
-                                2 -> "🌙"
-                                else -> "🤲"
-                            },
-                            fontSize = 42.sp
-                        )
-
-                        Spacer(
-                            Modifier.height(20.dp)
-                        )
-
-                        Text(
-                            currentDhikr.title,
-                            color = green,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            textAlign =
-                                TextAlign.Center
-                        )
-
-                        Spacer(
-                            Modifier.height(18.dp)
-                        )
-
-                        Text(
-                            currentDhikr.text,
-                            color = Color.White,
-                            fontSize = 23.sp,
-                            lineHeight = 38.sp,
-                            textAlign =
-                                TextAlign.Center
-                        )
-                    }
-                }
-
-                Spacer(
-                    Modifier.height(18.dp)
-                )
-
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement =
-                        Arrangement.spacedBy(12.dp)
-                ) {
-
-                    OutlinedButton(
-                        onClick = {
-                            if (index > 0) {
-                                index--
-                            }
-                        },
-                        enabled = index > 0,
-                        modifier =
-                            Modifier.weight(1f)
-                    ) {
-
-                        Icon(
-                            Icons.Default.ArrowForward,
-                            contentDescription =
-                                "السابق"
-                        )
-
-                        Spacer(
-                            Modifier.width(6.dp)
-                        )
-
-                        Text("السابق")
-                    }
-
-                    Button(
-                        onClick = {
-                            if (
-                                index <
-                                currentList.lastIndex
-                            ) {
-                                index++
-                            } else {
-                                index = 0
-                            }
-                        },
-                        modifier =
-                            Modifier.weight(1f)
-                    ) {
-
-                        Text(
-                            if (
-                                index ==
-                                currentList.lastIndex
-                            ) {
-                                "من البداية"
-                            } else {
-                                "التالي"
-                            }
-                        )
-
-                        Spacer(
-                            Modifier.width(6.dp)
-                        )
-
-                        Icon(
-                            Icons.Default.ArrowBack,
-                            contentDescription =
-                                "التالي"
-                        )
-                    }
-                }
-
-            } else {
-
-                Text(
-                    "لا توجد أذكار في هذا القسم",
-                    color = Color.White,
-                    modifier =
-                        Modifier.fillMaxWidth(),
-                    textAlign =
-                        TextAlign.Center
-                )
-            }
-        }
-    }
-
-    @Composable
-    private fun ReminderScreen(
-        onBack: () -> Unit
-    ) {
-
-        val prefs =
-            getSharedPreferences(
-                ReminderScheduler.PREFS,
-                Context.MODE_PRIVATE
-            )
-
-        var generalEnabled by remember {
-            mutableStateOf(
-                prefs.getBoolean(
-                    ReminderScheduler.ENABLED,
-                    true
-                )
-            )
-        }
-
-        var morningEnabled by remember {
-            mutableStateOf(
-                prefs.getBoolean(
-                    "morning_enabled",
-                    true
-                )
-            )
-        }
-
-        var eveningEnabled by remember {
-            mutableStateOf(
-                prefs.getBoolean(
-                    "evening_enabled",
-                    true
-                )
-            )
-        }
-
-        var interval by remember {
-            mutableIntStateOf(
-                prefs.getInt(
-                    ReminderScheduler.INTERVAL,
-                    30
-                )
-            )
-        }
-
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement =
-                Arrangement.spacedBy(12.dp)
-        ) {
-
-            item {
-                TopBar(
-                    "إعدادات التذكيرات",
-                    onBack
-                )
-            }
-
-            item {
-                ReminderCard(
-                    icon = "🔔",
-                    title = "التذكير العام",
-                    description =
-                        "ذكر عام يظهر لك حسب الفاصل الزمني الذي تختاره.",
-                    enabled = generalEnabled,
-                    onEnabledChange = { enabled ->
-
-                        generalEnabled = enabled
-
-                        prefs.edit()
-                            .putBoolean(
-                                ReminderScheduler.ENABLED,
-                                enabled
-                            )
-                            .apply()
-
-                        if (enabled) {
-
-                            ReminderScheduler.scheduleGeneral(
-                                this@MainActivity
-                            )
-
-                        } else {
-
-                            ReminderScheduler.cancelGeneral(
-                                this@MainActivity
-                            )
-                        }
-                    }
-                ) {
-
-                    Text(
-                        "الفاصل الزمني",
-                        color = cyan,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    Spacer(
-                        Modifier.height(10.dp)
-                    )
-
-                    val choices =
-                        listOf(
-                            1,
-                            3,
-                            5,
-                            10,
-                            15,
-                            30,
-                            60
-                        )
-
-                    choices.chunked(3)
-                        .forEach { row ->
-
-                            Row(
-                                Modifier.fillMaxWidth(),
-                                horizontalArrangement =
-                                    Arrangement.spacedBy(8.dp)
-                            ) {
-
-                                row.forEach { value ->
-
-                                    FilterChip(
-                                        selected =
-                                            interval == value,
-
-                                        onClick = {
-
-                                            interval = value
-
-                                            prefs.edit()
-                                                .putInt(
-                                                    ReminderScheduler.INTERVAL,
-                                                    value
-                                                )
-                                                .apply()
-
-                                            if (
-                                                generalEnabled
-                                            ) {
-
-                                                ReminderScheduler
-                                                    .scheduleGeneral(
-                                                        this@MainActivity
-                                                    )
-                                            }
-                                        },
-
-                                        label = {
-
-                                            Text(
-                                                if (
-                                                    value == 60
-                                                ) {
-                                                    "ساعة"
-                                                } else {
-                                                    "$value د"
-                                                }
-                                            )
-                                        },
-
-                                        modifier =
-                                            Modifier.weight(1f)
-                                    )
-                                }
-
-                                repeat(
-                                    3 - row.size
-                                ) {
-
-                                    Spacer(
-                                        Modifier.weight(1f)
-                                    )
-                                }
-                            }
-
-                            Spacer(
-                                Modifier.height(8.dp)
-                            )
-                        }
-                }
-            }
-
-            item {
-
-                ReminderCard(
-                    icon = "🌅",
-                    title = "أذكار الصباح",
-                    description =
-                        "تذكير مستقل بأذكار الصباح يوميًا الساعة 06:00.",
-                    enabled = morningEnabled,
-                    onEnabledChange = { enabled ->
-
-                        morningEnabled = enabled
-
-                        prefs.edit()
-                            .putBoolean(
-                                "morning_enabled",
-                                enabled
-                            )
-                            .apply()
-
-                        if (enabled) {
-
-                            ReminderScheduler.scheduleMorning(
-                                this@MainActivity
-                            )
-
-                        } else {
-
-                            ReminderScheduler.cancelMorning(
-                                this@MainActivity
-                            )
-                        }
-                    }
-                ) {
-
-                    Text(
-                        "الوقت: 06:00 صباحًا",
-                        color = cyan,
-                        fontSize = 15.sp
-                    )
-                }
-            }
-
-            item {
-
-                ReminderCard(
-                    icon = "🌙",
-                    title = "أذكار المساء",
-                    description =
-                        "تذكير مستقل بأذكار المساء يوميًا الساعة 05:00 عصرًا.",
-                    enabled = eveningEnabled,
-                    onEnabledChange = { enabled ->
-
-                        eveningEnabled = enabled
-
-                        prefs.edit()
-                            .putBoolean(
-                                "evening_enabled",
-                                enabled
-                            )
-                            .apply()
-
-                        if (enabled) {
-
-                            ReminderScheduler.scheduleEvening(
-                                this@MainActivity
-                            )
-
-                        } else {
-
-                            ReminderScheduler.cancelEvening(
-                                this@MainActivity
-                            )
-                        }
-                    }
-                ) {
-
-                    Text(
-                        "الوقت: 05:00 عصرًا",
-                        color = cyan,
-                        fontSize = 15.sp
-                    )
-                }
-            }
-        }
-    }
-
-    @Composable
-    private fun ReminderCard(
-        icon: String,
-        title: String,
-        description: String,
-        enabled: Boolean,
-        onEnabledChange: (Boolean) -> Unit,
-        extra: @Composable ColumnScope.() -> Unit
-    ) {
-
-        NeonCard(
-            borderColor =
-                if (enabled) green else muted
-        ) {
-
-            Column(
-                Modifier.padding(18.dp)
-            ) {
-
-                Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment =
-                        Alignment.CenterVertically
-                ) {
-
-                    Text(
-                        icon,
-                        fontSize = 30.sp
-                    )
-
-                    Spacer(
-                        Modifier.width(12.dp)
-                    )
-
-                    Column(
-                        Modifier.weight(1f)
-                    ) {
-
-                        Text(
-                            title,
-                            color = Color.White,
-                            fontSize = 19.sp,
-                            fontWeight =
-                                FontWeight.Bold
-                        )
-
-                        Text(
-                            description,
-                            color = muted,
-                            fontSize = 12.sp,
-                            lineHeight = 19.sp
-                        )
-                    }
-
-                    Switch(
-                        checked = enabled,
-                        onCheckedChange =
-                            onEnabledChange
-                    )
-                }
-
-                Spacer(
-                    Modifier.height(14.dp)
-                )
-
-                extra()
-            }
-        }
-    }
-
-    @Composable
-    private fun PrayerScreen(
-        locationUpdateVersion: Int,
-        onBack: () -> Unit,
-        onLocation: () -> Unit
-    ) {
-
-        /*
-         * ربط الشاشة بتحديث الموقع بدون recreate().
-         */
-        val currentLocationVersion =
-            locationUpdateVersion
-
-        currentLocationVersion.hashCode()
-
-        val locationPrefs =
-            getSharedPreferences(
-                "wadhkur_location",
-                MODE_PRIVATE
-            )
-
-        val lat =
-            locationPrefs.getFloat(
-                "lat",
-                Float.NaN
-            )
-
-        val lon =
-            locationPrefs.getFloat(
-                "lon",
-                Float.NaN
-            )
-
-        val now =
-            Calendar.getInstance()
-
-        val times =
-            if (
-                !lat.isNaN() &&
-                !lon.isNaN()
-            ) {
-
-                PrayerCalculator.calculate(
-                    lat.toDouble(),
-                    lon.toDouble(),
-                    now
-                )
-
-            } else {
-
-                null
-            }
-
-        val nextName =
-            if (times != null) {
-
-                getNextPrayerInfo(
-                    lat.toDouble(),
-                    lon.toDouble()
-                ).name
-
-            } else {
-
-                ""
-            }
-
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement =
-                Arrangement.spacedBy(9.dp)
-        ) {
-
-            item {
-
-                TopBar(
-                    "مواقيت الصلاة",
-                    onBack
-                )
-            }
-
-            if (times == null) {
-
-                item {
-
-                    NeonCard(
-                        borderColor = cyan
-                    ) {
-
-                        Column(
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(24.dp),
-                            horizontalAlignment =
-                                Alignment.CenterHorizontally
-                        ) {
-
-                            Text(
-                                "🕌",
-                                fontSize = 48.sp
-                            )
-
-                            Spacer(
-                                Modifier.height(12.dp)
-                            )
-
-                            Text(
-                                "نحتاج إلى موقع الهاتف",
-                                color = Color.White,
-                                fontSize = 21.sp,
-                                fontWeight =
-                                    FontWeight.Bold
-                            )
-
-                            Spacer(
-                                Modifier.height(8.dp)
-                            )
-
-                            Text(
-                                "يتم حساب مواقيت الصلاة محليًا حسب موقعك.",
-                                color = muted,
-                                textAlign =
-                                    TextAlign.Center
-                            )
-
-                            Spacer(
-                                Modifier.height(16.dp)
-                            )
-
-                            Button(
-                                onClick = onLocation
-                            ) {
-
-                                Text(
-                                    "السماح بالموقع"
-                                )
-                            }
-                        }
-                    }
-                }
-
-            } else {
-
-                item {
-
-                    NeonCard(
-                        borderColor = green
-                    ) {
-
-                        Column(
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(18.dp),
-                            horizontalAlignment =
-                                Alignment.CenterHorizontally
-                        ) {
-
-                            Text(
-                                "الصلاة القادمة",
-                                color = green,
-                                fontSize = 14.sp
-                            )
-
-                            Spacer(
-                                Modifier.height(5.dp)
-                            )
-
-                            Text(
-                                nextName,
-                                color = Color.White,
-                                fontSize = 28.sp,
-                                fontWeight =
-                                    FontWeight.Bold
-                            )
-
-                            Spacer(
-                                Modifier.height(5.dp)
-                            )
-
-                            Text(
-                                "العداد موجود في الصفحة الرئيسية",
-                                color = muted,
-                                fontSize = 12.sp
-                            )
-                        }
-                    }
-                }
-
-                val rows =
-                    prayerList(times)
-
-                items(rows) { item ->
-
-                    val isNext =
-                        item.first == nextName
-
-                    Card(
-                        colors =
-                            CardDefaults.cardColors(
-                                containerColor =
-                                    if (isNext) {
-                                        Color(0xFF102B27)
-                                    } else {
-                                        card
-                                    }
-                            ),
-                        shape =
-                            RoundedCornerShape(18.dp),
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .then(
-                                    if (isNext) {
-
-                                        Modifier.border(
-                                            1.dp,
-                                            green,
-                                            RoundedCornerShape(
-                                                18.dp
-                                            )
-                                        )
-
-                                    } else {
-
-                                        Modifier
-                                    }
-                                )
-                    ) {
-
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(
-                                    horizontal = 18.dp,
-                                    vertical = 16.dp
-                                ),
-                            verticalAlignment =
-                                Alignment.CenterVertically
-                        ) {
-
-                            Text(
-                                when (item.first) {
-
-                                    "الفجر" -> "🌅"
-                                    "الظهر" -> "☀️"
-                                    "العصر" -> "🌤️"
-                                    "المغرب" -> "🌇"
-                                    "العشاء" -> "🌙"
-
-                                    else -> "🕌"
-                                },
-                                fontSize = 25.sp
-                            )
-
-                            Spacer(
-                                Modifier.width(12.dp)
-                            )
-
-                            Text(
-                                item.first,
-                                color =
-                                    if (isNext) {
-                                        green
-                                    } else {
-                                        Color.White
-                                    },
-                                fontSize = 18.sp,
-                                fontWeight =
-                                    if (isNext) {
-                                        FontWeight.Bold
-                                    } else {
-                                        FontWeight.Normal
-                                    },
-                                modifier =
-                                    Modifier.weight(1f)
-                            )
-
-                            Text(
-                                item.second,
-                                color =
-                                    if (isNext) {
-                                        green
-                                    } else {
-                                        cyan
-                                    },
-                                fontSize = 17.sp,
-                                fontWeight =
-                                    FontWeight.Bold
-                            )
-                        }
-                    }
-                }
-
-                item {
-
-                    TextButton(
-                        onClick = onLocation,
-                        modifier =
-                            Modifier.fillMaxWidth()
-                    ) {
-
-                        Text(
-                            "📍 تحديث الموقع",
-                            color = cyan
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    @Composable
-    private fun TasbeehScreen(
-        onBack: () -> Unit
-    ) {
-
-        val adhkar = listOf(
-            "سبحان الله",
-            "الحمد لله",
-            "أستغفر الله",
-            "لا إله إلا الله",
-            "اللهم صل وسلم وبارك على نبينا محمد",
-            "لا حول ولا قوة إلا بالله"
-        )
-
-        var selectedDhikr by rememberSaveable {
-            mutableStateOf(adhkar[0])
-        }
-
-        var count by rememberSaveable {
-            mutableIntStateOf(0)
-        }
-
-        var target by rememberSaveable {
-            mutableIntStateOf(33)
-        }
-
-        var expandedDhikr by remember {
-            mutableStateOf(false)
-        }
-
-        var expandedTarget by remember {
-            mutableStateOf(false)
-        }
-
-        val progress =
-            if (target <= 0) {
-                0f
-            } else {
-                (
-                    count.toFloat() /
-                        target.toFloat()
-                    ).coerceIn(
-                        0f,
-                        1f
-                    )
-            }
-
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
-            horizontalAlignment =
-                Alignment.CenterHorizontally
-        ) {
-
-            item {
-
-                TopBar(
-                    "المسبحة",
-                    onBack
-                )
-            }
-
-            item {
-
-                Box {
-
-                    OutlinedButton(
-                        onClick = {
-                            expandedDhikr = true
-                        }
-                    ) {
-
-                        Text(
-                            selectedDhikr,
-                            color = Color.White,
-                            fontSize = 16.sp,
-                            textAlign =
-                                TextAlign.Center
-                        )
-
-                        Spacer(
-                            Modifier.width(8.dp)
-                        )
-
-                        Text(
-                            "▼",
-                            color = cyan
-                        )
-                    }
-
-                    DropdownMenu(
-                        expanded =
-                            expandedDhikr,
-                        onDismissRequest = {
-                            expandedDhikr = false
-                        }
-                    ) {
-
-                        adhkar.forEach { dhikr ->
-
-                            DropdownMenuItem(
-                                text = {
-
-                                    Text(
-                                        dhikr,
-                                        textAlign =
-                                            TextAlign.End,
-                                        modifier =
-                                            Modifier
-                                                .fillMaxWidth()
-                                    )
-                                },
-                                onClick = {
-
-                                    selectedDhikr =
-                                        dhikr
-
-                                    count = 0
-
-                                    expandedDhikr =
-                                        false
-                                }
-                            )
+                if (provider != null) {
+                    manager.getCurrentLocation(provider, null, mainExecutor) { location ->
+                        if (location != null) {
+                            getSharedPreferences(LOCATION_PREFS, MODE_PRIVATE).edit()
+                                .putFloat("lat", location.latitude.toFloat())
+                                .putFloat("lon", location.longitude.toFloat())
+                                .apply()
+                            locationVersion++
                         }
                     }
                 }
             }
+        } catch (_: SecurityException) { }
+    }
 
-            item {
-
-                Spacer(
-                    Modifier.height(14.dp)
-                )
-
-                Box {
-
-                    OutlinedButton(
-                        onClick = {
-                            expandedTarget = true
-                        }
-                    ) {
-
-                        Text(
-                            when (target) {
-
-                                33 ->
-                                    "الهدف: 33"
-
-                                100 ->
-                                    "الهدف: 100"
-
-                                else ->
-                                    "بدون حد"
-                            },
-                            color = cyan
-                        )
-                    }
-
-                    DropdownMenu(
-                        expanded =
-                            expandedTarget,
-                        onDismissRequest = {
-                            expandedTarget = false
-                        }
-                    ) {
-
-                        DropdownMenuItem(
-                            text = {
-                                Text("33")
-                            },
-                            onClick = {
-
-                                target = 33
-                                count = 0
-                                expandedTarget = false
-                            }
-                        )
-
-                        DropdownMenuItem(
-                            text = {
-                                Text("100")
-                            },
-                            onClick = {
-
-                                target = 100
-                                count = 0
-                                expandedTarget = false
-                            }
-                        )
-
-                        DropdownMenuItem(
-                            text = {
-                                Text("بدون حد")
-                            },
-                            onClick = {
-
-                                target = 0
-                                expandedTarget = false
-                            }
-                        )
-                    }
-                }
+    private fun initializeAdsAndConsent() {
+        val params = ConsentRequestParameters.Builder().build()
+        val info = UserMessagingPlatform.getConsentInformation(this)
+        info.requestConsentInfoUpdate(this, params, {
+            UserMessagingPlatform.loadAndShowConsentFormIfRequired(this) {
+                if (info.canRequestAds()) MobileAds.initialize(this) {}
             }
+        }, {
+            if (info.canRequestAds()) MobileAds.initialize(this) {}
+        })
+    }
 
-            item {
+    private fun openEmail() {
+        startActivity(Intent(Intent.ACTION_SENDTO).apply {
+            data = Uri.parse("mailto:$EMAIL")
+            putExtra(Intent.EXTRA_SUBJECT, "استفسار حول تطبيق وذكر")
+        })
+    }
+}
 
-                Spacer(
-                    Modifier.height(28.dp)
-                )
+@Composable
+private fun WadhkurApp(
+    locationVersion: Int,
+    requestLocation: () -> Unit,
+    openEmail: () -> Unit,
+    azimuth: Float
+) {
+    var screen by rememberSaveable { mutableStateOf("home") }
+    var showLocationDisclosure by remember { mutableStateOf(false) }
 
-                NeonCard(
-                    borderColor = green
-                ) {
-
-                    Column(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(22.dp),
-                        horizontalAlignment =
-                            Alignment.CenterHorizontally
-                    ) {
-
-                        Text(
-                            "$count",
-                            color = green,
-                            fontSize = 68.sp,
-                            fontWeight =
-                                FontWeight.Bold
-                        )
-
-                        Text(
-                            selectedDhikr,
-                            color = Color.White,
-                            fontSize = 21.sp,
-                            fontWeight =
-                                FontWeight.Bold,
-                            textAlign =
-                                TextAlign.Center
-                        )
-
-                        Spacer(
-                            Modifier.height(18.dp)
-                        )
-
-                        if (target > 0) {
-
-                            LinearProgressIndicator(
-                                progress = {
-                                    progress
-                                },
-                                modifier =
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .height(7.dp)
-                                        .clip(
-                                            RoundedCornerShape(
-                                                10.dp
-                                            )
-                                        ),
-                                color = green,
-                                trackColor =
-                                    Color(0xFF20333B)
-                            )
-
-                            Spacer(
-                                Modifier.height(7.dp)
-                            )
-
-                            Text(
-                                "$count / $target",
-                                color = muted,
-                                fontSize = 13.sp
-                            )
-
-                        } else {
-
-                            Text(
-                                "بدون حد",
-                                color = muted,
-                                fontSize = 13.sp
-                            )
-                        }
-                    }
-                }
+    Scaffold(
+        containerColor = WadhkurColors.background,
+        bottomBar = {
+            NavigationBar(containerColor = WadhkurColors.surface) {
+                NavigationBarItem(selected = screen == "home", onClick = { screen = "home" }, icon = { Icon(Icons.Default.Home, null) }, label = { Text("الرئيسية") })
+                NavigationBarItem(selected = screen == "prayer", onClick = { screen = "prayer" }, icon = { Icon(Icons.Default.AccessTime, null) }, label = { Text("الصلاة") })
+                NavigationBarItem(selected = screen == "qibla", onClick = { screen = "qibla" }, icon = { Icon(Icons.Default.Explore, null) }, label = { Text("القبلة") })
+                NavigationBarItem(selected = screen == "more", onClick = { screen = "more" }, icon = { Icon(Icons.Default.Settings, null) }, label = { Text("المزيد") })
             }
-
-            item {
-
-                Spacer(
-                    Modifier.height(22.dp)
-                )
-
-                Button(
-                    onClick = {
-
-                        if (
-                            target == 0 ||
-                            count < target
-                        ) {
-                            count++
-                        }
-                    },
-                    modifier =
-                        Modifier.size(180.dp),
-                    shape = CircleShape,
-                    colors =
-                        ButtonDefaults.buttonColors(
-                            containerColor =
-                                Color(0xFF12332B)
-                        )
-                ) {
-
-                    Text(
-                        "تسبيح",
-                        color = green,
-                        fontSize = 24.sp,
-                        fontWeight =
-                            FontWeight.Bold
-                    )
-                }
-            }
-
-            item {
-
-                Spacer(
-                    Modifier.height(12.dp)
-                )
-
-                TextButton(
-                    onClick = {
-                        count = 0
-                    }
-                ) {
-
-                    Text(
-                        "تصفير العداد",
-                        color = cyan,
-                        fontSize = 16.sp
-                    )
-                }
-            }
+        }
+    ) { padding ->
+        when (screen) {
+            "home" -> HomeScreen(
+                padding = padding,
+                locationVersion = locationVersion,
+                go = { screen = it },
+                requestLocation = { showLocationDisclosure = true }
+            )
+            "prayer" -> PrayerScreen(padding, locationVersion) { screen = "home" }
+            "qibla" -> QiblaScreen(padding, locationVersion, azimuth) { screen = "home" }
+            "more" -> MoreScreen(padding, go = { screen = it }, openEmail = openEmail)
+            "dhikr" -> DhikrScreen(padding) { screen = "home" }
+            "tasbeeh" -> TasbeehScreen(padding) { screen = "home" }
+            "calendar" -> CalendarScreen(padding) { screen = "home" }
+            "reminders" -> ReminderSettingsScreen(padding) { screen = "home" }
+            "privacy" -> PrivacyScreen(padding) { screen = "home" }
+            else -> HomeScreen(padding, locationVersion, { screen = it }, { showLocationDisclosure = true })
         }
     }
 
-    @Composable
-    private fun AboutScreen(
-        onBack: () -> Unit
-    ) {
-
-        Column(
-            Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            horizontalAlignment =
-                Alignment.CenterHorizontally
-        ) {
-
-            TopBar(
-                "عن التطبيق",
-                onBack
-            )
-
-            Spacer(
-                Modifier.height(25.dp)
-            )
-
-            NeonCard(
-                borderColor = green
-            ) {
-
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(25.dp),
-                    horizontalAlignment =
-                        Alignment.CenterHorizontally
-                ) {
-
-                    Text(
-                        "وٌ ذکْــر",
-                        color = green,
-                        fontSize = 40.sp,
-                        fontWeight =
-                            FontWeight.Bold
-                    )
-
-                    Spacer(
-                        Modifier.height(5.dp)
-                    )
-
-                    Text(
-                        "الإصدار 3.0.0",
-                        color = cyan,
-                        fontSize = 16.sp
-                    )
-
-                    Spacer(
-                        Modifier.height(25.dp)
-                    )
-
-                    Text(
-                        "المطور صالح الخليفي",
-                        color = Color.White,
-                        fontSize = 19.sp,
-                        fontWeight =
-                            FontWeight.Bold
-                    )
-
-                    Spacer(
-                        Modifier.height(5.dp)
-                    )
-
-                    Text(
-                        "@iSx3i",
-                        color = cyan,
-                        fontSize = 17.sp
-                    )
-
-                    Spacer(
-                        Modifier.height(25.dp)
-                    )
-
-                    Text(
-                        "تطبيق مجاني يساعدك على دوام الذكر، مع أذكار متنوعة وتذكيرات ومواقيت صلاة محسوبة محليًا ومسبحة إلكترونية.",
-                        color = muted,
-                        fontSize = 14.sp,
-                        textAlign =
-                            TextAlign.Center,
-                        lineHeight = 24.sp
-                    )
-                }
-            }
-        }
-    }
-
-    @Composable
-    private fun TopBar(
-        title: String,
-        onBack: () -> Unit
-    ) {
-
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(bottom = 12.dp),
-            verticalAlignment =
-                Alignment.CenterVertically
-        ) {
-
-            IconButton(
-                onClick = onBack
-            ) {
-
-                Icon(
-                    Icons.Default.ArrowForward,
-                    contentDescription = "رجوع",
-                    tint = green
-                )
-            }
-
-            Text(
-                title,
-                color = Color.White,
-                fontSize = 23.sp,
-                fontWeight = FontWeight.Bold
-            )
-        }
-    }
-
-    @Composable
-    private fun DhikrPopup(
-        text: String,
-        onDismiss: () -> Unit
-    ) {
-
+    if (showLocationDisclosure) {
         AlertDialog(
-            onDismissRequest = onDismiss,
-            containerColor = card,
-
-            title = {
-
-                Text(
-                    "🔔 تذكير بالذكر",
-                    color = green,
-                    textAlign =
-                        TextAlign.Center,
-                    modifier =
-                        Modifier.fillMaxWidth()
-                )
-            },
-
-            text = {
-
-                Text(
-                    text,
-                    color = Color.White,
-                    fontSize = 24.sp,
-                    lineHeight = 38.sp,
-                    textAlign =
-                        TextAlign.Center,
-                    modifier =
-                        Modifier.fillMaxWidth()
-                )
-            },
-
+            onDismissRequest = { showLocationDisclosure = false },
+            title = { Text("الموقع لمواقيت الصلاة والقبلة") },
+            text = { Text("يستخدم التطبيق موقع جهازك فقط لحساب مواقيت الصلاة واتجاه القبلة محليًا. لا نحتاج إلى إنشاء حساب أو إرسال موقعك إلى خادم التطبيق.") },
             confirmButton = {
+                Button(onClick = { showLocationDisclosure = false; requestLocation() }) { Text("السماح بالموقع") }
+            },
+            dismissButton = { TextButton(onClick = { showLocationDisclosure = false }) { Text("لاحقًا") } }
+        )
+    }
+}
 
-                Button(
-                    onClick = onDismiss,
-                    modifier =
-                        Modifier.fillMaxWidth()
-                ) {
+@Composable
+private fun AppFrame(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    Box(modifier.fillMaxSize().background(WadhkurColors.background)) {
+        Box(
+            Modifier.fillMaxSize().padding(horizontal = 7.dp)
+                .border(BorderStroke(1.dp, WadhkurColors.edge), RoundedCornerShape(24.dp))
+        )
+        Column(Modifier.fillMaxSize().padding(horizontal = 15.dp), content = content)
+    }
+}
 
-                    Text(
-                        "رددته ✓"
-                    )
+@Composable
+private fun HomeScreen(
+    padding: PaddingValues,
+    locationVersion: Int,
+    go: (String) -> Unit,
+    requestLocation: () -> Unit
+) {
+    val context = LocalContext.current
+    val prefs = context.getSharedPreferences("wadhkur_location", Context.MODE_PRIVATE)
+    val lat = prefs.getFloat("lat", Float.NaN).toDouble()
+    val lon = prefs.getFloat("lon", Float.NaN).toDouble()
+    val hasLocation = lat.isFinite() && lon.isFinite()
+    val prayers = if (hasLocation) PrayerCalculator.calculate(lat, lon) else null
+    var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(locationVersion) { while (true) { now = System.currentTimeMillis(); delay(1000) } }
+    val next = prayers?.let { nextPrayer(it, now) }
+    val hijri = islamicDate(Calendar.getInstance())
+
+    AppFrame(Modifier.padding(padding)) {
+        LazyColumn(
+            Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(top = 18.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            item {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                    Text("وَذَكِّرْ", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = WadhkurColors.primary)
+                    Text("عبادتك اليومية في مكان واحد", color = WadhkurColors.muted)
                 }
             }
-        )
+            item { RamadanCard() }
+            item {
+                SectionCard("الصلاة القادمة", Icons.Default.AccessTime) {
+                    if (next != null) {
+                        Text(next.first, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = WadhkurColors.primary)
+                        Text("الوقت: ${next.second}", color = WadhkurColors.muted)
+                        Text(countdown(next.third - now), fontSize = 30.sp, fontWeight = FontWeight.Bold, color = WadhkurColors.text)
+                    } else {
+                        Text("حدّد موقعك لعرض الصلاة القادمة", color = WadhkurColors.muted)
+                        Button(onClick = requestLocation) { Icon(Icons.Default.LocationOn, null); Spacer(Modifier.width(6.dp)); Text("تحديد الموقع") }
+                    }
+                }
+            }
+            item {
+                SectionCard("التاريخ الهجري", Icons.Default.CalendarMonth) {
+                    Text(hijri, fontSize = 23.sp, fontWeight = FontWeight.Bold, color = WadhkurColors.text)
+                    Text(gregorianDate(), color = WadhkurColors.muted)
+                }
+            }
+            item { QuickTile("أذكار الصباح", "ابدأ يومك بالذكر", "☀️") { go("dhikr") } }
+            item { QuickTile("أذكار المساء", "اختم يومك بالذكر", "🌙") { go("dhikr") } }
+            item { QuickTile("تسبيح سريع", "عداد يعمل دون اتصال", "📿") { go("tasbeeh") } }
+            item { PrayerPreview(prayers, hasLocation) { go("prayer") } }
+            item { AdBanner() }
+            item {
+                Text("مميزات وذكر", fontSize = 21.sp, fontWeight = FontWeight.Bold, color = WadhkurColors.text)
+                Text("القبلة • التقويم الهجري • التذكيرات • الأذكار • التسبيح • مواقيت الصلاة • الخصوصية", color = WadhkurColors.muted)
+            }
+        }
     }
+}
 
-    @Composable
-    private fun WadhkurTheme(
-        content: @Composable () -> Unit
+@Composable
+private fun RamadanCard() {
+    val remaining = remember { mutableStateOf(ramadanCountdown()) }
+    LaunchedEffect(Unit) { while (true) { remaining.value = ramadanCountdown(); delay(60_000) } }
+    SectionCard("كم باقي على رمضان؟", Icons.Default.Brightness4) {
+        Text(remaining.value, fontSize = 27.sp, fontWeight = FontWeight.Bold, color = WadhkurColors.primary)
+        Text("العدّاد يعتمد على التقويم الهجري المدني وقد يختلف بدء رمضان رسميًا حسب الرؤية المحلية.", color = WadhkurColors.muted, fontSize = 12.sp)
+    }
+}
+
+@Composable
+private fun PrayerPreview(prayers: PrayerTimes?, hasLocation: Boolean, open: () -> Unit) {
+    SectionCard("مواقيت الصلاة", Icons.Default.AccessTime) {
+        if (!hasLocation || prayers == null) {
+            Text("فعّل الموقع لحساب المواقيت حسب موقعك.", color = WadhkurColors.muted)
+        } else {
+            val values = listOf("الفجر" to prayers.fajr, "الشروق" to prayers.sunrise, "الظهر" to prayers.dhuhr, "العصر" to prayers.asr, "المغرب" to prayers.maghrib, "العشاء" to prayers.isha)
+            values.forEach { (name, time) -> Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) { Text(name); Text(time, fontWeight = FontWeight.Bold) } }
+        }
+        TextButton(onClick = open) { Text("عرض تفاصيل الصلاة") }
+    }
+}
+
+@Composable
+private fun QuickTile(title: String, subtitle: String, emoji: String, onClick: () -> Unit) {
+    Card(
+        Modifier.fillMaxWidth().clickable(onClick = onClick),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = WadhkurColors.surface),
+        border = BorderStroke(1.dp, WadhkurColors.edge)
     ) {
-
-        MaterialTheme(
-
-            colorScheme =
-                darkColorScheme(
-
-                    primary = green,
-                    secondary = cyan,
-                    tertiary = purple,
-                    background = bg,
-                    surface = card
-                ),
-
-            content = content
-        )
+        Row(Modifier.padding(17.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(48.dp).clip(CircleShape).background(WadhkurColors.surface2), contentAlignment = Alignment.Center) { Text(emoji, fontSize = 24.sp) }
+            Spacer(Modifier.width(14.dp))
+            Column { Text(title, fontSize = 18.sp, fontWeight = FontWeight.Bold); Text(subtitle, color = WadhkurColors.muted, fontSize = 13.sp) }
+        }
     }
+}
+
+@Composable
+private fun SectionCard(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector, content: @Composable ColumnScope.() -> Unit) {
+    Card(
+        Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = WadhkurColors.surface),
+        border = BorderStroke(1.dp, WadhkurColors.edge)
+    ) {
+        Column(Modifier.padding(17.dp), content = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(icon, null, tint = WadhkurColors.primary)
+                Spacer(Modifier.width(8.dp))
+                Text(title, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            }
+            Spacer(Modifier.height(10.dp))
+            content()
+        })
+    }
+}
+
+@Composable
+private fun AdBanner() {
+    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = WadhkurColors.surface), border = BorderStroke(1.dp, WadhkurColors.edge)) {
+        Column(Modifier.fillMaxWidth().padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("إعلان", color = WadhkurColors.muted, fontSize = 10.sp)
+            AndroidView(
+                modifier = Modifier.fillMaxWidth().height(60.dp),
+                factory = { context -> AdView(context).apply { setAdSize(AdSize.BANNER); adUnitId = "ca-app-pub-3940256099942544/6300978111"; loadAd(AdRequest.Builder().build()) } }
+            )
+        }
+    }
+}
+
+@Composable
+private fun PrayerScreen(padding: PaddingValues, locationVersion: Int, back: () -> Unit) {
+    val context = LocalContext.current
+    val prefs = context.getSharedPreferences("wadhkur_location", Context.MODE_PRIVATE)
+    val lat = prefs.getFloat("lat", Float.NaN).toDouble(); val lon = prefs.getFloat("lon", Float.NaN).toDouble()
+    val prayers = if (lat.isFinite() && lon.isFinite()) PrayerCalculator.calculate(lat, lon) else null
+    AppFrame(Modifier.padding(padding)) {
+        ScreenHeader("مواقيت الصلاة", back)
+        LazyColumn(contentPadding = PaddingValues(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (prayers == null) item { Text("لم يتم تحديد الموقع بعد.", color = WadhkurColors.muted) }
+            prayers?.let {
+                listOf("الفجر" to it.fajr, "الشروق" to it.sunrise, "الظهر" to it.dhuhr, "العصر" to it.asr, "المغرب" to it.maghrib, "العشاء" to it.isha).forEach { (name, time) -> item { Row(Modifier.fillMaxWidth().background(WadhkurColors.surface, RoundedCornerShape(16.dp)).border(1.dp, WadhkurColors.edge, RoundedCornerShape(16.dp)).padding(18.dp), horizontalArrangement = Arrangement.SpaceBetween) { Text(name, fontSize = 18.sp); Text(time, fontWeight = FontWeight.Bold, color = WadhkurColors.primary) } } }
+            }
+            item { Text("طريقة الحساب المحلية مبنية على الموقع ومعادلات شمسية داخل الجهاز، دون الحاجة إلى خادم.", color = WadhkurColors.muted, fontSize = 12.sp) }
+        }
+    }
+}
+
+@Composable
+private fun QiblaScreen(padding: PaddingValues, locationVersion: Int, azimuth: Float, back: () -> Unit) {
+    val context = LocalContext.current
+    val prefs = context.getSharedPreferences("wadhkur_location", Context.MODE_PRIVATE)
+    val lat = prefs.getFloat("lat", Float.NaN).toDouble(); val lon = prefs.getFloat("lon", Float.NaN).toDouble()
+    val bearing = if (lat.isFinite() && lon.isFinite()) qiblaBearing(lat, lon) else null
+    val rotation = if (bearing != null) bearing - azimuth else 0.0
+    AppFrame(Modifier.padding(padding)) {
+        ScreenHeader("اتجاه القبلة", back)
+        Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            Spacer(Modifier.height(10.dp))
+            Box(Modifier.size(230.dp).clip(CircleShape).background(WadhkurColors.surface).border(2.dp, WadhkurColors.primary, CircleShape), contentAlignment = Alignment.Center) {
+                Text("🕋", fontSize = 68.sp, modifier = Modifier.graphicsLayer(rotationZ = rotation.toFloat()))
+            }
+            if (bearing != null) {
+                Text("اتجاه القبلة: ${bearing.toInt()}°", fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                Text("حرّك الهاتف حتى يتجه الرمز نحو القبلة", color = WadhkurColors.muted, textAlign = TextAlign.Center)
+            } else {
+                Text("حدد موقعك أولًا لاحتساب اتجاه القبلة", color = WadhkurColors.muted)
+            }
+            Text("تعتمد البوصلة على مستشعرات الجهاز؛ قد تحتاج إلى معايرة الهاتف.", fontSize = 12.sp, color = WadhkurColors.muted, textAlign = TextAlign.Center)
+        }
+    }
+}
+
+@Composable
+private fun DhikrScreen(padding: PaddingValues, back: () -> Unit) {
+    var category by rememberSaveable { mutableStateOf("morning") }
+    val list = if (category == "morning") DhikrRepository.morning else DhikrRepository.evening
+    var index by rememberSaveable { mutableIntStateOf(0) }
+    val current = list.getOrNull(index.coerceIn(0, list.lastIndex))
+    AppFrame(Modifier.padding(padding)) {
+        ScreenHeader("الأذكار", back)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = { category = "morning"; index = 0 }, modifier = Modifier.weight(1f)) { Text("أذكار الصباح") }
+            Button(onClick = { category = "evening"; index = 0 }, modifier = Modifier.weight(1f)) { Text("أذكار المساء") }
+        }
+        Spacer(Modifier.height(14.dp))
+        if (current != null) {
+            Card(Modifier.fillMaxWidth().weight(1f), colors = CardDefaults.cardColors(containerColor = WadhkurColors.surface), border = BorderStroke(1.dp, WadhkurColors.edge)) {
+                Column(Modifier.fillMaxSize().padding(22.dp), verticalArrangement = Arrangement.SpaceBetween, horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("${index + 1} / ${list.size}", color = WadhkurColors.primary)
+                    Text(current.text, fontSize = 25.sp, lineHeight = 40.sp, textAlign = TextAlign.Center, fontWeight = FontWeight.Medium)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        TextButton(enabled = index > 0, onClick = { index-- }) { Text("السابق") }
+                        TextButton(enabled = index < list.lastIndex, onClick = { index++ }) { Text("التالي") }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TasbeehScreen(padding: PaddingValues, back: () -> Unit) {
+    val context = LocalContext.current
+    val prefs = context.getSharedPreferences("wadhkur_tasbeeh", Context.MODE_PRIVATE)
+    var count by rememberSaveable { mutableIntStateOf(prefs.getInt("count", 0)) }
+    var goal by rememberSaveable { mutableIntStateOf(prefs.getInt("goal", 33)) }
+    fun save(value: Int) { count = value; prefs.edit().putInt("count", value).putInt("goal", goal).apply() }
+    AppFrame(Modifier.padding(padding)) {
+        ScreenHeader("التسبيح السريع", back)
+        Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            Text("$count", fontSize = 70.sp, fontWeight = FontWeight.Bold, color = WadhkurColors.primary)
+            Text("الهدف: $goal", color = WadhkurColors.muted)
+            Box(Modifier.size(190.dp).clip(CircleShape).background(WadhkurColors.surface).border(3.dp, WadhkurColors.primary, CircleShape).clickable { save(count + 1) }, contentAlignment = Alignment.Center) { Text("سَبِّح", fontSize = 30.sp, fontWeight = FontWeight.Bold) }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(33, 100, 1000).forEach { value -> TextButton(onClick = { goal = value; prefs.edit().putInt("goal", value).apply() }) { Text("$value") } }
+            }
+            TextButton(onClick = { save(0) }) { Icon(Icons.Default.Refresh, null); Spacer(Modifier.width(5.dp)); Text("تصفير العداد") }
+        }
+    }
+}
+
+@Composable
+private fun CalendarScreen(padding: PaddingValues, back: () -> Unit) {
+    val cal = Calendar.getInstance()
+    AppFrame(Modifier.padding(padding)) {
+        ScreenHeader("التقويم الهجري", back)
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            item { SectionCard("اليوم", Icons.Default.CalendarMonth) { Text(islamicDate(cal), fontSize = 26.sp, fontWeight = FontWeight.Bold); Text(gregorianDate(), color = WadhkurColors.muted) } }
+            item { Text("يمكن توسيع التقويم لاحقًا لإضافة المناسبات الهجرية، بداية الأشهر، والتنبيهات الشخصية.", color = WadhkurColors.muted) }
+        }
+    }
+}
+
+@Composable
+private fun ReminderSettingsScreen(padding: PaddingValues, back: () -> Unit) {
+    val context = LocalContext.current
+    val prefs = context.getSharedPreferences(ReminderScheduler.PREFS, Context.MODE_PRIVATE)
+    var general by remember { mutableStateOf(prefs.getBoolean(ReminderScheduler.ENABLED, true)) }
+    var morning by remember { mutableStateOf(prefs.getBoolean(ReminderScheduler.MORNING_ENABLED, true)) }
+    var evening by remember { mutableStateOf(prefs.getBoolean(ReminderScheduler.EVENING_ENABLED, true)) }
+    fun update(key: String, value: Boolean) { prefs.edit().putBoolean(key, value).apply(); ReminderScheduler.scheduleAll(context) }
+    AppFrame(Modifier.padding(padding)) {
+        ScreenHeader("التذكيرات", back)
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            item { SettingRow("تذكير عام", "حسب الفاصل المحفوظ", general) { general = it; update(ReminderScheduler.ENABLED, it) } }
+            item { SettingRow("أذكار الصباح", "يوميًا الساعة 06:00", morning) { morning = it; update(ReminderScheduler.MORNING_ENABLED, it) } }
+            item { SettingRow("أذكار المساء", "يوميًا الساعة 17:00", evening) { evening = it; update(ReminderScheduler.EVENING_ENABLED, it) } }
+            item { Text("قد تختلف دقة المنبهات على بعض الأجهزة بسبب إعدادات توفير البطارية. لا يمنح التطبيق نفسه صلاحية تجاوز قيود النظام.", color = WadhkurColors.muted, fontSize = 12.sp) }
+        }
+    }
+}
+
+@Composable
+private fun MoreScreen(padding: PaddingValues, go: (String) -> Unit, openEmail: () -> Unit) {
+    AppFrame(Modifier.padding(padding)) {
+        Text("المزيد", Modifier.padding(top = 20.dp), fontSize = 28.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(12.dp))
+        MoreRow("القبلة", "اتجاه القبلة بالبوصلة", Icons.Default.Explore) { go("qibla") }
+        MoreRow("التقويم الهجري", "التاريخ الهجري اليوم", Icons.Default.CalendarMonth) { go("calendar") }
+        MoreRow("التذكيرات", "أذكار الصباح والمساء والتذكير العام", Icons.Default.Notifications) { go("reminders") }
+        MoreRow("الخصوصية", "سياسة الخصوصية وبيانات التطبيق", Icons.Default.PrivacyTip) { go("privacy") }
+        MoreRow("عن وذكر", "المطور والتواصل", Icons.Default.Info) { go("about") }
+        Spacer(Modifier.height(18.dp))
+        TextButton(onClick = openEmail, modifier = Modifier.fillMaxWidth()) { Text(MainActivity.EMAIL) }
+    }
+}
+
+@Composable
+private fun PrivacyScreen(padding: PaddingValues, back: () -> Unit) {
+    AppFrame(Modifier.padding(padding)) {
+        ScreenHeader("الخصوصية", back)
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
+            item { Text("سياسة الخصوصية — وذكر", fontSize = 24.sp, fontWeight = FontWeight.Bold) }
+            item { Text("التطبيق مصمم ليعمل محليًا قدر الإمكان. موقع الجهاز، عند السماح به، يستخدم لحساب مواقيت الصلاة واتجاه القبلة داخل التطبيق. لا يطلب التطبيق إنشاء حساب.", color = WadhkurColors.text, lineHeight = 27.sp) }
+            item { Text("الإعلانات: يتكامل التطبيق مع Google Mobile Ads لعرض الإعلانات. قد يعالج مزود الإعلانات معرّفات الجهاز وبيانات مرتبطة بالإعلانات وفق إعدادات الموافقة وسياساته. يجب إكمال إعدادات الخصوصية وData Safety في Play Console قبل النشر.", color = WadhkurColors.text, lineHeight = 27.sp) }
+            item { Text("التخزين المحلي: تحفظ إعدادات التذكيرات والعداد وبعض الإحداثيات محليًا على الجهاز.", color = WadhkurColors.text, lineHeight = 27.sp) }
+            item { Text("التواصل وحذف البيانات: لا يوجد حساب مستخدم داخل التطبيق. للاستفسارات المتعلقة بالخصوصية: ${MainActivity.EMAIL}", color = WadhkurColors.text, lineHeight = 27.sp) }
+            item { Text("هذه الشاشة لا تغني عن نشر سياسة خصوصية عامة على عنوان URL وإدخاله في Play Console قبل الإصدار التجاري.", color = WadhkurColors.primary, fontWeight = FontWeight.Bold) }
+        }
+    }
+}
+
+@Composable
+private fun AboutScreen(padding: PaddingValues, back: () -> Unit) {
+    AppFrame(Modifier.padding(padding)) {
+        ScreenHeader("عن وذكر", back)
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+            Text("وَذَكِّرْ", fontSize = 42.sp, fontWeight = FontWeight.Bold, color = WadhkurColors.primary)
+            Spacer(Modifier.height(8.dp))
+            Text("المطور صالح الخليفي", fontSize = 19.sp, fontWeight = FontWeight.Bold)
+            Text(MainActivity.EMAIL, color = WadhkurColors.primary)
+            Spacer(Modifier.height(18.dp))
+            Text("تطبيق إسلامي خفيف، سريع، يعمل دون حساب، ويجمع الأذكار ومواقيت الصلاة والقبلة والتقويم والتسبيح والتذكيرات في تجربة واحدة.", textAlign = TextAlign.Center, color = WadhkurColors.muted, lineHeight = 26.sp)
+            Spacer(Modifier.height(20.dp))
+            Text("الإصدار 4.0.0", color = WadhkurColors.muted)
+        }
+    }
+}
+
+@Composable
+private fun ScreenHeader(title: String, back: () -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+        IconButton(onClick = back) { Icon(Icons.Default.ArrowBack, null) }
+        Text(title, fontSize = 25.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+private fun SettingRow(title: String, subtitle: String, checked: Boolean, onChecked: (Boolean) -> Unit) {
+    Row(Modifier.fillMaxWidth().background(WadhkurColors.surface, RoundedCornerShape(16.dp)).border(1.dp, WadhkurColors.edge, RoundedCornerShape(16.dp)).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) { Text(title, fontSize = 17.sp, fontWeight = FontWeight.Bold); Text(subtitle, color = WadhkurColors.muted, fontSize = 12.sp) }
+        Switch(checked = checked, onCheckedChange = onChecked)
+    }
+}
+
+@Composable
+private fun MoreRow(title: String, subtitle: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
+    Card(Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable(onClick = onClick), colors = CardDefaults.cardColors(containerColor = WadhkurColors.surface), border = BorderStroke(1.dp, WadhkurColors.edge)) {
+        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, null, tint = WadhkurColors.primary, modifier = Modifier.size(28.dp))
+            Spacer(Modifier.width(13.dp))
+            Column { Text(title, fontWeight = FontWeight.Bold, fontSize = 17.sp); Text(subtitle, color = WadhkurColors.muted, fontSize = 12.sp) }
+        }
+    }
+}
+
+private fun nextPrayer(times: PrayerTimes, nowMillis: Long): Triple<String, String, Long>? {
+    val now = Calendar.getInstance().apply { timeInMillis = nowMillis }
+    val entries = listOf("الفجر" to times.fajr, "الظهر" to times.dhuhr, "العصر" to times.asr, "المغرب" to times.maghrib, "العشاء" to times.isha)
+    for ((name, time) in entries) {
+        val minute = parsePrayerMinute(time)
+        val target = Calendar.getInstance().apply { timeInMillis = nowMillis; set(Calendar.HOUR_OF_DAY, minute / 60); set(Calendar.MINUTE, minute % 60); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) }
+        if (target.timeInMillis > nowMillis) return Triple(name, time, target.timeInMillis)
+    }
+    val minute = parsePrayerMinute(times.fajr)
+    val tomorrow = Calendar.getInstance().apply { timeInMillis = nowMillis; add(Calendar.DAY_OF_YEAR, 1); set(Calendar.HOUR_OF_DAY, minute / 60); set(Calendar.MINUTE, minute % 60); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) }
+    return Triple("الفجر", times.fajr, tomorrow.timeInMillis)
+}
+
+private fun parsePrayerMinute(value: String): Int {
+    val clean = value.replace("ص", "").replace("م", "").trim()
+    val parts = clean.split(":")
+    var hour = parts.getOrNull(0)?.toIntOrNull() ?: 0
+    val minute = parts.getOrNull(1)?.toIntOrNull() ?: 0
+    if (value.contains("م") && hour < 12) hour += 12
+    if (value.contains("ص") && hour == 12) hour = 0
+    return hour * 60 + minute
+}
+
+private fun countdown(ms: Long): String {
+    val total = (ms / 1000).coerceAtLeast(0)
+    return String.format(Locale("ar"), "%02d:%02d:%02d", total / 3600, (total % 3600) / 60, total % 60)
+}
+
+private fun gregorianDate(): String = SimpleDateFormat("EEEE، d MMMM yyyy", Locale("ar")).format(Date())
+
+private fun ramadanCountdown(): String {
+    val target = islamicToGregorianMillis(1448, 9, 1)
+    val diff = target - System.currentTimeMillis()
+    if (diff <= 0) return "رمضان الحالي أو القادم يحتاج تحديث الرؤية الرسمية"
+    val days = diff / 86_400_000L
+    val hours = (diff % 86_400_000L) / 3_600_000L
+    return "باقي تقريبًا $days يوم و$hours ساعة"
+}
+
+private fun islamicDate(gregorian: Calendar): String {
+    val (y, m, d) = gregorianToIslamic(gregorian.get(Calendar.YEAR), gregorian.get(Calendar.MONTH) + 1, gregorian.get(Calendar.DAY_OF_MONTH))
+    val months = arrayOf("محرم", "صفر", "ربيع الأول", "ربيع الآخر", "جمادى الأولى", "جمادى الآخرة", "رجب", "شعبان", "رمضان", "شوال", "ذو القعدة", "ذو الحجة")
+    return "$d ${months[m - 1]} $y هـ"
+}
+
+private fun gregorianToIslamic(y: Int, m: Int, d: Int): Triple<Int, Int, Int> {
+    val jd = gregorianToJd(y, m, d)
+    val l0 = jd - 1948440 + 10632
+    val n = (l0 - 1) / 10631
+    var l = l0 - 10631 * n + 354
+    val j = ((10985 - l) / 5316) * ((50 * l) / 17719) + (l / 5670) * ((43 * l) / 15238)
+    l = l - ((30 - j) / 15) * ((17719 * j) / 50) - (j / 16) * ((15238 * j) / 43) + 29
+    val month = (24 * l) / 709
+    val day = l - (709 * month) / 24
+    val year = 30 * n + j - 30
+    return Triple(year, month, day)
+}
+
+private fun gregorianToJd(y: Int, m: Int, d: Int): Int {
+    val a = (14 - m) / 12
+    val yy = y + 4800 - a
+    val mm = m + 12 * a - 3
+    return d + (153 * mm + 2) / 5 + 365 * yy + yy / 4 - yy / 100 + yy / 400 - 32045
+}
+
+private fun islamicToGregorianMillis(year: Int, month: Int, day: Int): Long {
+    val jd = day + kotlin.math.ceil(29.5 * (month - 1)).toInt() + (year - 1) * 354 + ((3 + 11 * year) / 30) + 1948439
+    val j = jd + 32044
+    val g = j / 146097
+    val dg = j % 146097
+    val c = ((dg / 36524) + 1) * 3 / 4
+    val dc = dg - c * 36524
+    val b = dc / 1461
+    val db = dc % 1461
+    val a = ((db / 365) + 1) * 3 / 4
+    val da = db - a * 365
+    val y = g * 400 + c * 100 + b * 4 + a
+    val m = (da * 5 + 308) / 153 - 2
+    val d = da - (m + 4) * 153 / 5 + 122
+    val yearG = y - 4800 + (m + 2) / 12
+    val monthG = (m + 2) % 12 + 1
+    val dayG = d + 1
+    return Calendar.getInstance().apply { set(yearG, monthG - 1, dayG, 0, 0, 0); set(Calendar.MILLISECOND, 0) }.timeInMillis
+}
+
+private fun qiblaBearing(latitude: Double, longitude: Double): Double {
+    val kaabaLat = Math.toRadians(21.422487)
+    val kaabaLon = Math.toRadians(39.826206)
+    val lat = Math.toRadians(latitude)
+    val lon = Math.toRadians(longitude)
+    val dLon = kaabaLon - lon
+    val y = sin(dLon)
+    val x = cos(lat) * sin(kaabaLat) - sin(lat) * cos(kaabaLat) * cos(dLon)
+    return (Math.toDegrees(atan2(y, x)) + 360.0) % 360.0
+}
+
+private object WadhkurColors {
+    val background = Color(0xFF071116)
+    val surface = Color(0xFF0E1D25)
+    val surface2 = Color(0xFF142833)
+    val edge = Color(0xFF235060)
+    val primary = Color(0xFF4DFFAA)
+    val text = Color(0xFFEAF7F1)
+    val muted = Color(0xFF9EB5BD)
+}
+
+@Composable
+private fun WadhkurTheme(content: @Composable () -> Unit) {
+    MaterialTheme(colorScheme = androidx.compose.material3.darkColorScheme(primary = WadhkurColors.primary, background = WadhkurColors.background, surface = WadhkurColors.surface, onPrimary = Color.Black, onBackground = WadhkurColors.text, onSurface = WadhkurColors.text), content = content)
 }
